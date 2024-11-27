@@ -32,13 +32,8 @@ def create_india_weight_mask(data: xarray.Dataset, weight: float = 10.0) -> xarr
     india_lon_bounds = (68.0, 97.0)  # Approximate longitude bounds for India
     
     mask = xarray.full_like(data.isel(time=0), fill_value=1.0)  # Default weight is 1.0
-    india_mask = mask.sel(lat=slice(*india_lat_bounds), lon=slice(*india_lon_bounds))
-    india_mask[:] = weight  # Assign higher weight to the Indian region
-    
-    mask = mask.where(mask.lat < india_lat_bounds[0], other=1.0)
-    mask = mask.where(mask.lat > india_lat_bounds[1], other=1.0)
-    mask = mask.where(mask.lon < india_lon_bounds[0], other=1.0)
-    mask = mask.where(mask.lon > india_lon_bounds[1], other=1.0)
+    mask = mask.where((mask.lat >= india_lat_bounds[0]) & (mask.lat <= india_lat_bounds[1]) &
+                      (mask.lon >= india_lon_bounds[0]) & (mask.lon <= india_lon_bounds[1]), other=weight)
     
     return mask
 
@@ -325,7 +320,11 @@ class Predictor(predictor_base.Predictor):
         one_step_loss, inputs, scan_variables)
     
 
+    # Create the weight mask for India
     weight_mask = create_india_weight_mask(targets)
+
+    # Apply the weight mask to the losses
+    weighted_losses = per_timestep_losses * weight_mask
 
     print(type(per_timestep_losses))
     print(type(weight_mask))
