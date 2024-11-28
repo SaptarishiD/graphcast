@@ -1,1 +1,5 @@
 .DS_Store
+misc/
+build/
+dist/
+graphcast.egg-info/
