@@ -371,10 +371,20 @@ class Predictor(predictor_base.Predictor):
       _, (per_timestep_losses, per_timestep_diagnostics) = hk.scan(
           one_step_loss, inputs, scan_variables)
 
-      # Re-wrap loss and diagnostics as DataArray and average them over time:
-      (loss, diagnostics) = jax.tree_util.tree_map(
-          lambda x: xarray_jax.DataArray(x, dims=('time', 'batch')).mean(  # pylint: disable=g-long-lambda
-              'time', skipna=False),
-          (per_timestep_losses, per_timestep_diagnostics))
+      # Modify the averaging to handle different array shapes
+      def safe_mean(x):
+          """
+          Safely compute mean across time dimension, handling different array shapes
+          """
+          # If x is already a scalar or 1D array, return it
+          if x.ndim <= 1:
+              return x
+          
+          # If x has multiple dimensions, mean over time
+          return jnp.mean(x, axis=0)
+
+      # Average losses and diagnostics safely
+      loss = jax.tree_util.tree_map(safe_mean, per_timestep_losses)
+      diagnostics = jax.tree_util.tree_map(safe_mean, per_timestep_diagnostics)
 
       return loss, diagnostics
