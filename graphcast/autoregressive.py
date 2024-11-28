@@ -23,6 +23,7 @@ from graphcast import xarray_tree
 import haiku as hk
 import jax
 import xarray
+import numpy as np
 
 
 def create_india_mask(targets):
