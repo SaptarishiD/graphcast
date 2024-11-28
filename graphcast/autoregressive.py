@@ -59,7 +59,7 @@ def create_india_mask(targets):
     )
     
     # Create a DataArray with the mask
-    mask_da = xr.DataArray(
+    mask_da = xarray.DataArray(
         india_mask.astype(np.float32),
         coords={'lat': lat_coords, 'lon': lon_coords},
         dims=['lat', 'lon']
