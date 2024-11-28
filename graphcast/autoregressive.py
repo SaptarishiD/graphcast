@@ -24,6 +24,7 @@ import haiku as hk
 import jax
 import xarray
 import numpy as np
+import jax.numpy as jnp
 
 
 def create_india_mask(targets):
