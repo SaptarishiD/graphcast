@@ -23,53 +23,23 @@ from graphcast import xarray_tree
 import haiku as hk
 import jax
 import xarray
-import numpy as np
-import jax.numpy as jnp
 
 
-def create_india_mask(targets):
-    """
-    Create a mask for the Indian region with higher weights.
+
+# SD
+def create_india_weight_mask(data: xarray.Dataset, weight: float = 10.0) -> xarray.DataArray:
+    india_lat_bounds = (8.0, 37.0)  # Approximate latitude bounds for India
+    india_lon_bounds = (68.0, 97.0)  # Approximate longitude bounds for India
     
-    Args:
-    targets (xarray.Dataset): Target dataset to extract coordinates from
+    mask = xarray.full_like(data.isel(time=0), fill_value=1.0)  # Default weight is 1.0
+    mask = mask.where((mask.lat >= india_lat_bounds[0]) & (mask.lat <= india_lat_bounds[1]) &
+                      (mask.lon >= india_lon_bounds[0]) & (mask.lon <= india_lon_bounds[1]), other=weight)
     
-    Returns:
-    xarray.DataArray: A mask with higher weights for the Indian region
-    """
-    # Assuming a 2D spatial variable (first one found)
-    first_var = list(targets.variables)[0]
-    lat_coords = targets[first_var].coords['lat'].values
-    lon_coords = targets[first_var].coords['lon'].values
-    
-    # Approximate coordinates for India
-    # Latitude range: ~8°N to 37°N
-    # Longitude range: ~68°E to 97°E
-    india_lat_min, india_lat_max = 8, 37
-    india_lon_min, india_lon_max = 68, 97
-    
-    # Create a meshgrid of coordinates
-    lon_grid, lat_grid = np.meshgrid(lon_coords, lat_coords)
-    
-    # Create India region mask
-    india_mask = (
-        (lat_grid >= india_lat_min) & 
-        (lat_grid <= india_lat_max) & 
-        (lon_grid >= india_lon_min) & 
-        (lon_grid <= india_lon_max)
-    )
-    
-    # Create a DataArray with the mask
-    mask_da = xarray.DataArray(
-        india_mask.astype(np.float32),
-        coords={'lat': lat_coords, 'lon': lon_coords},
-        dims=['lat', 'lon']
-    )
-    
-    # Multiply mask by a higher weight for India
-    mask_da = mask_da * 5.0 + 1.0  # Base weight of 1, India regions get 5x more
-    
-    return mask_da
+    return mask
+
+
+# SD
+
 
 def _unflatten_and_expand_time(flat_variables, tree_def, time_coords):
   variables = jax.tree_util.tree_unflatten(tree_def, flat_variables)
@@ -268,124 +238,102 @@ class Predictor(predictor_base.Predictor):
     return predictions
 
   def loss(self,
-          inputs: xarray.Dataset,
-          targets: xarray.Dataset,
-          forcings: xarray.Dataset,
-          **kwargs
-          ) -> predictor_base.LossAndDiagnostics:
-      """
-      Loss method with region-specific weighting for the Indian region.
-      Extends the original loss calculation to apply higher weights 
-      to predictions over India.
-      """
-      if targets.sizes['time'] == 1:
-          # If there is only a single target timestep, delegate to the 
-          # underlying single-step predictor
-          return self._predictor.loss(inputs, targets, forcings, **kwargs)
+           inputs: xarray.Dataset,
+           targets: xarray.Dataset,
+           forcings: xarray.Dataset,
+           **kwargs
+           ) -> predictor_base.LossAndDiagnostics:
+    """The mean of the per-timestep losses of the underlying predictor."""
+    if targets.sizes['time'] == 1:
+      # If there is only a single target timestep then we don't need any
+      # autoregressive feedback and can delegate the loss directly to the
+      # underlying single-step predictor. This means the underlying predictor
+      # doesn't need to implement .loss_and_predictions.
+      return self._predictor.loss(inputs, targets, forcings, **kwargs)
 
-      # Create region mask for weighting
-      region_mask = create_india_mask(targets)
+    constant_inputs = self._get_and_validate_constant_inputs(
+        inputs, targets, forcings)
+    self._validate_targets_and_forcings(targets, forcings)
+    # After the above checks, the remaining inputs must be time-dependent:
+    inputs = inputs.drop_vars(constant_inputs.keys())
 
-      constant_inputs = self._get_and_validate_constant_inputs(
-          inputs, targets, forcings)
-      self._validate_targets_and_forcings(targets, forcings)
-      # After the above checks, the remaining inputs must be time-dependent:
-      inputs = inputs.drop_vars(constant_inputs.keys())
+    if self._noise_level:
+      def add_noise(x):
+        return x + self._noise_level * jax.random.normal(
+            hk.next_rng_key(), shape=x.shape)
+      # Add noise to time-dependent variables of the inputs.
+      inputs = jax.tree_map(add_noise, inputs)
 
-      if self._noise_level:
-          def add_noise(x):
-              return x + self._noise_level * jax.random.normal(
-                  hk.next_rng_key(), shape=x.shape)
-          # Add noise to time-dependent variables of the inputs.
-          inputs = jax.tree_map(add_noise, inputs)
+    # The per-timestep targets passed by scan to one_step_loss below will have
+    # no leading time axis. We need a treedef without the time axis to use
+    # inside one_step_loss to unflatten it back into a dataset:
+    flat_targets, target_treedef = _get_flat_arrays_and_single_timestep_treedef(
+        targets)
+    scan_variables = flat_targets
 
-      # The per-timestep targets passed by scan to one_step_loss below will have
-      # no leading time axis. We need a treedef without the time axis to use
-      # inside one_step_loss to unflatten it back into a dataset:
-      flat_targets, target_treedef = _get_flat_arrays_and_single_timestep_treedef(
-          targets)
-      scan_variables = flat_targets
+    flat_forcings, forcings_treedef = (
+        _get_flat_arrays_and_single_timestep_treedef(forcings))
+    scan_variables = (flat_targets, flat_forcings)
 
-      flat_forcings, forcings_treedef = (
-          _get_flat_arrays_and_single_timestep_treedef(forcings))
-      scan_variables = (flat_targets, flat_forcings)
+    def one_step_loss(inputs, scan_variables):
+      flat_target, flat_forcings = scan_variables
+      forcings = _unflatten_and_expand_time(flat_forcings, forcings_treedef,
+                                            targets.coords['time'][:1])
 
-      def one_step_loss(inputs, scan_variables):
-          flat_target, flat_forcings = scan_variables
-          forcings = _unflatten_and_expand_time(flat_forcings, forcings_treedef,
-                                                targets.coords['time'][:1])
+      target = _unflatten_and_expand_time(flat_target, target_treedef,
+                                          targets.coords['time'][:1])
 
-          target = _unflatten_and_expand_time(flat_target, target_treedef,
-                                              targets.coords['time'][:1])
+      # Add constant inputs:
+      all_inputs = xarray.merge([constant_inputs, inputs])
 
-          # Add constant inputs:
-          all_inputs = xarray.merge([constant_inputs, inputs])
+      (loss, diagnostics), predictions = self._predictor.loss_and_predictions(
+          all_inputs,
+          target,
+          forcings=forcings,
+          **kwargs)
 
-          (loss, diagnostics), predictions = self._predictor.loss_and_predictions(
-              all_inputs,
-              target,
-              forcings=forcings,
-              **kwargs)
+      # Unwrap to jax arrays shape (batch,):
+      loss, diagnostics = xarray_tree.map_structure(
+          xarray_jax.unwrap_data, (loss, diagnostics))
 
-          # Apply region-specific weighting to the loss
-          def apply_region_weight(loss_array):
-              """
-              Apply region-specific weighting to the loss
-              """
-              if 'batch' in loss_array.dims:
-                  # If batch dimension exists, broadcast the mask
-                  try:
-                      # Try to align mask with loss dimensions
-                      mask_broadcast = region_mask.broadcast_like(
-                          loss_array.isel(batch=0)
-                      ).broadcast_like(loss_array)
-                      return loss_array * mask_broadcast
-                  except Exception:
-                      # Fallback to simple broadcasting if alignment fails
-                      return loss_array * region_mask.values
-              
-              # If no batch dimension, apply mask directly
-              return loss_array * region_mask
+      predictions = cast(xarray.Dataset, predictions)  # Keeps pytype happy.
+      next_frame = xarray.merge([predictions, forcings])
+      next_inputs = self._update_inputs(inputs, next_frame)
 
-          # Apply region weighting to loss
-          weighted_loss = xarray_tree.map_structure(apply_region_weight, loss)
+      return next_inputs, (loss, diagnostics)
 
-          # Unwrap to jax arrays shape (batch,):
-          weighted_loss, diagnostics = xarray_tree.map_structure(
-              xarray_jax.unwrap_data, (weighted_loss, diagnostics))
+    if self._gradient_checkpointing:
+      scan_length = targets.dims['time']
+      if scan_length <= 1:
+        logging.warning(
+            'Skipping gradient checkpointing for sequence length of 1')
+      else:
+        one_step_loss = hk.remat(one_step_loss)
 
-          predictions = cast(xarray.Dataset, predictions)  # Keeps pytype happy.
-          next_frame = xarray.merge([predictions, forcings])
-          next_inputs = self._update_inputs(inputs, next_frame)
+    # We can pass inputs (the initial state of the loop) in directly as a
+    # Dataset because the shape we pass in to scan is the same as the shape scan
+    # passes to the inner function. But, for scan_variables, we must flatten the
+    # targets (and unflatten them inside the inner function) because they are
+    # passed to the inner function per-timestep without the original time axis.
+    # The same apply to the optional forcing.
+    _, (per_timestep_losses, per_timestep_diagnostics) = hk.scan(
+        one_step_loss, inputs, scan_variables)
+    
 
-          return next_inputs, (weighted_loss, diagnostics)
+    # Create the weight mask for India
+    weight_mask = create_india_weight_mask(targets)
 
-      if self._gradient_checkpointing:
-          scan_length = targets.dims['time']
-          if scan_length <= 1:
-              logging.warning(
-                  'Skipping gradient checkpointing for sequence length of 1')
-          else:
-              one_step_loss = hk.remat(one_step_loss)
+    # Apply the weight mask to the losses
+    weighted_losses = per_timestep_losses * weight_mask
 
-      # Perform the scan with weighted loss calculation
-      _, (per_timestep_losses, per_timestep_diagnostics) = hk.scan(
-          one_step_loss, inputs, scan_variables)
+    print(type(per_timestep_losses))
+    print(type(weight_mask))
+    weighted_losses = per_timestep_losses * weight_mask
 
-      # Modify the averaging to handle different array shapes
-      def safe_mean(x):
-          """
-          Safely compute mean across time dimension, handling different array shapes
-          """
-          # If x is already a scalar or 1D array, return it
-          if x.ndim <= 1:
-              return x
-          
-          # If x has multiple dimensions, mean over time
-          return jnp.mean(x, axis=0)
+    # Re-wrap loss and diagnostics as DataArray and average them over time:
+    (loss, diagnostics) = jax.tree_util.tree_map(
+        lambda x: xarray_jax.DataArray(x, dims=('time', 'batch')).mean(  # pylint: disable=g-long-lambda
+            'time', skipna=False),
+        (weighted_losses, per_timestep_diagnostics))
 
-      # Average losses and diagnostics safely
-      loss = jax.tree_util.tree_map(safe_mean, per_timestep_losses)
-      diagnostics = jax.tree_util.tree_map(safe_mean, per_timestep_diagnostics)
-
-      return loss, diagnostics
+    return loss, diagnostics
