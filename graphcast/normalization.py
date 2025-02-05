@@ -24,6 +24,7 @@ from typing import Optional, Tuple
 from graphcast import predictor_base
 from graphcast import xarray_tree
 import xarray
+import jax
 
 
 def normalize(values: xarray.Dataset,
@@ -182,7 +183,7 @@ class InputsAndResiduals(predictor_base.Predictor):
       **kwargs,
       ) -> Tuple[predictor_base.LossAndDiagnostics,
                  xarray.Dataset]:
-    print("In normalization.py")
+    jax.debug.print("In normalization.py")
     """The loss computed on normalized data, with unnormalized predictions."""
     norm_inputs = normalize(inputs, self._scales, self._locations)
     norm_forcings = normalize(forcings, self._scales, self._locations)

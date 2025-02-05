@@ -40,6 +40,7 @@ import jax.numpy as jnp
 import jraph
 import numpy as np
 import xarray
+import jax
 
 Kwargs = Mapping[str, Any]
 
@@ -394,7 +395,7 @@ class GraphCast(predictor_base.Predictor):
       forcings: xarray.Dataset,
       ) -> tuple[predictor_base.LossAndDiagnostics, xarray.Dataset]:
     # Forward pass.
-    print("In graphcast.py")
+    jax.debug.print("In graphcast.py")
     predictions = self(
         inputs, targets_template=targets, forcings=forcings, is_training=True)
     # Compute loss.
