@@ -17,6 +17,7 @@
 from typing import Optional, cast
 
 from absl import logging
+from graphcast import graphcast
 from graphcast import predictor_base
 from graphcast import xarray_jax
 from graphcast import xarray_tree
@@ -228,6 +229,7 @@ class Predictor(predictor_base.Predictor):
            **kwargs
            ) -> predictor_base.LossAndDiagnostics:
     """The mean of the per-timestep losses of the underlying predictor."""
+    jax.debug.print("In loss() of autoregressive.py")
     if targets.sizes['time'] == 1:
       # If there is only a single target timestep then we don't need any
       # autoregressive feedback and can delegate the loss directly to the
@@ -272,7 +274,7 @@ class Predictor(predictor_base.Predictor):
       # Add constant inputs:
       all_inputs = xarray.merge([constant_inputs, inputs])
 
-      (loss, diagnostics), predictions = self._predictor.loss_and_predictions(
+      (loss, diagnostics), predictions = graphcast.loss_and_predictions(
           all_inputs,
           target,
           forcings=forcings,
