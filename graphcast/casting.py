@@ -97,6 +97,7 @@ class Bfloat16Cast(predictor_base.Predictor):
       **kwargs,
       ) -> Tuple[predictor_base.LossAndDiagnostics,
                  xarray.Dataset]:
+    jax.debug.print("In casting.py")
     if not self._enabled:
       return self._predictor.loss_and_predictions(inputs, targets, forcings,  # pytype: disable=bad-return-type  # jax-ndarray
                                                   **kwargs)
