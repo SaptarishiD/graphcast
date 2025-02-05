@@ -274,7 +274,7 @@ class Predictor(predictor_base.Predictor):
       # Add constant inputs:
       all_inputs = xarray.merge([constant_inputs, inputs])
 
-      (loss, diagnostics), predictions = graphcast.loss_and_predictions(
+      (loss, diagnostics), predictions = graphcast.GraphCas.loss_and_predictions(
           all_inputs,
           target,
           forcings=forcings,
