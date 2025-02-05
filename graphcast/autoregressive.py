@@ -242,6 +242,7 @@ class Predictor(predictor_base.Predictor):
     inputs = inputs.drop_vars(constant_inputs.keys())
 
     if self._noise_level:
+
       def add_noise(x):
         return x + self._noise_level * jax.random.normal(
             hk.next_rng_key(), shape=x.shape)
@@ -258,6 +259,7 @@ class Predictor(predictor_base.Predictor):
     flat_forcings, forcings_treedef = (
         _get_flat_arrays_and_single_timestep_treedef(forcings))
     scan_variables = (flat_targets, flat_forcings)
+
 
     def one_step_loss(inputs, scan_variables):
       flat_target, flat_forcings = scan_variables

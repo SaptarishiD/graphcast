@@ -182,6 +182,7 @@ class InputsAndResiduals(predictor_base.Predictor):
       **kwargs,
       ) -> Tuple[predictor_base.LossAndDiagnostics,
                  xarray.Dataset]:
+    print("In normalization.py")
     """The loss computed on normalized data, with unnormalized predictions."""
     norm_inputs = normalize(inputs, self._scales, self._locations)
     norm_forcings = normalize(forcings, self._scales, self._locations)

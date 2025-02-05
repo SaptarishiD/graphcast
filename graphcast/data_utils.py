@@ -1,3 +1,5 @@
+# <data_utils>
+
 # Copyright 2023 DeepMind Technologies Limited.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -357,3 +359,4 @@ def extract_inputs_targets_forcings(
   targets = targets[list(target_variables)]
 
   return inputs, targets, forcings
+# </data_utils>

@@ -1,3 +1,4 @@
+# <rollout.py>
 # Copyright 2023 DeepMind Technologies Limited.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -267,3 +268,4 @@ def extend_targets_template(
         coords=coords)
 
   return xarray_tree.map_structure(extend_time, targets_template)
+# </rollout.py>

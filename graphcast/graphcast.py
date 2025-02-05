@@ -394,6 +394,7 @@ class GraphCast(predictor_base.Predictor):
       forcings: xarray.Dataset,
       ) -> tuple[predictor_base.LossAndDiagnostics, xarray.Dataset]:
     # Forward pass.
+    print("In graphcast.py")
     predictions = self(
         inputs, targets_template=targets, forcings=forcings, is_training=True)
     # Compute loss.
