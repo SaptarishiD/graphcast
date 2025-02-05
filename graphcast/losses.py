@@ -19,6 +19,7 @@ from graphcast import xarray_tree
 import numpy as np
 from typing_extensions import Protocol
 import xarray
+import jax
 
 
 LossAndDiagnostics = tuple[xarray.DataArray, xarray.Dataset]
@@ -59,7 +60,14 @@ def weighted_mse_per_level(
     per_variable_weights: Mapping[str, float],
 ) -> LossAndDiagnostics:
   """Latitude- and pressure-level-weighted MSE loss."""
+  jax.debug.print("In losses.py")
+  
+  lat_min, lat_max = 8.0, 37.0
+  lon_min, lon_max = 68.0, 97.0
+
   def loss(prediction, target):
+    prediction=prediction.slice(lat=slice(lat_min, lat_max), lon=slice(lon_min, lon_max))
+    target=target.slice(lat=slice(lat_min, lat_max), lon=slice(lon_min, lon_max))
     loss = (prediction - target)**2
     loss *= normalized_latitude_weights(target).astype(loss.dtype)
     if 'level' in target.dims:
