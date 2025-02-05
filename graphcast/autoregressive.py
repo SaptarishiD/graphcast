@@ -235,7 +235,7 @@ class Predictor(predictor_base.Predictor):
       # autoregressive feedback and can delegate the loss directly to the
       # underlying single-step predictor. This means the underlying predictor
       # doesn't need to implement .loss_and_predictions.
-      return self._predictor.loss(inputs, targets, forcings, **kwargs)
+      return graphcast.GraphCast.loss(inputs, targets, forcings, **kwargs)
 
     constant_inputs = self._get_and_validate_constant_inputs(
         inputs, targets, forcings)
@@ -274,7 +274,7 @@ class Predictor(predictor_base.Predictor):
       # Add constant inputs:
       all_inputs = xarray.merge([constant_inputs, inputs])
 
-      (loss, diagnostics), predictions = graphcast.GraphCas.loss_and_predictions(
+      (loss, diagnostics), predictions = graphcast.GraphCast.loss_and_predictions(
           all_inputs,
           target,
           forcings=forcings,
