@@ -68,8 +68,8 @@ def weighted_mse_per_level(
   def loss(prediction, target):
 
 
-    prediction=prediction.sel(lat=slice(lat_min, lat_max), lon=slice(lon_min, lon_max))
-    target=target.sel(lat=slice(lat_min, lat_max), lon=slice(lon_min, lon_max))
+    # prediction_india = prediction.sel(lat=slice(lat_min, lat_max), lon=slice(lon_min, lon_max))
+    # target_india = target.sel(lat=slice(lat_min, lat_max), lon=slice(lon_min, lon_max))
 
     loss = (prediction - target)**2
     loss *= normalized_latitude_weights(target).astype(loss.dtype)
