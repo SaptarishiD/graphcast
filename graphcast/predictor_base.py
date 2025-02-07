@@ -137,7 +137,9 @@ class Predictor(abc.ABC):
       forcings: xarray.Dataset,
       **optional_kwargs,
       ) -> Tuple[LossAndDiagnostics, xarray.Dataset]:
-    print("In predictor_base.py")
+    
+    print("In predictor_base.py loss_and_predictions")
+    
     """Like .loss but also returns corresponding predictions.
 
     Implementing this is optional as it's not used directly by the Experiment,

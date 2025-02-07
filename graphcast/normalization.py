@@ -167,6 +167,8 @@ class InputsAndResiduals(predictor_base.Predictor):
            **kwargs,
            ) -> predictor_base.LossAndDiagnostics:
     """Returns the loss computed on normalized inputs and targets."""
+    jax.debug.print("In normalization.py loss")
+    
     norm_inputs = normalize(inputs, self._scales, self._locations)
     norm_forcings = normalize(forcings, self._scales, self._locations)
     norm_target_residuals = xarray_tree.map_structure(
@@ -183,7 +185,8 @@ class InputsAndResiduals(predictor_base.Predictor):
       **kwargs,
       ) -> Tuple[predictor_base.LossAndDiagnostics,
                  xarray.Dataset]:
-    jax.debug.print("In normalization.py")
+    jax.debug.print("In normalization.py loss_and_predictions")
+
     """The loss computed on normalized data, with unnormalized predictions."""
     norm_inputs = normalize(inputs, self._scales, self._locations)
     norm_forcings = normalize(forcings, self._scales, self._locations)
