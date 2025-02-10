@@ -1,2 +1,5 @@
-[Getting data from CDS and formatting it for the model](https://github.com/google-deepmind/graphcast/issues/22)
-[Inference requirements](https://github.com/google-deepmind/graphcast/issues/33)
+1. [Getting data from CDS and formatting it for the model](https://github.com/google-deepmind/graphcast/issues/22)
+2. [Inference requirements](https://github.com/google-deepmind/graphcast/issues/33)
+3. [Optax Finetuning Code](https://github.com/google-deepmind/graphcast/issues/43)
+4. [Mesh Alterations for Region-Specific Model](https://github.com/google-deepmind/graphcast/issues/46)
+5. [Some Training Code](https://github.com/google-deepmind/graphcast/issues/78)
