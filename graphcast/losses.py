@@ -69,6 +69,9 @@ def weighted_mse_per_level(
     # prediction=prediction.slice(lat=slice(lat_min, lat_max), lon=slice(lon_min, lon_max))
     # target=target.slice(lat=slice(lat_min, lat_max), lon=slice(lon_min, lon_max))
 
+    jax.debug.print("\n\nIn loss function ppt: \n")
+    print(predictions['total_precipitation_6hr'])
+
     
     loss = (prediction - target)**2
     loss *= normalized_latitude_weights(target).astype(loss.dtype)

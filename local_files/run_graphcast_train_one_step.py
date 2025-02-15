@@ -1,5 +1,6 @@
 import argparse
 import os
+os.environ['XLA_PYTHON_CLIENT_MEM_FRACTION'] = '2.0'
 import dataclasses
 import xarray
 import numpy as np
