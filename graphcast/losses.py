@@ -66,8 +66,10 @@ def weighted_mse_per_level(
   lon_min, lon_max = 68.0, 97.0
 
   def loss(prediction, target):
-    prediction=prediction.slice(lat=slice(lat_min, lat_max), lon=slice(lon_min, lon_max))
-    target=target.slice(lat=slice(lat_min, lat_max), lon=slice(lon_min, lon_max))
+    # prediction=prediction.slice(lat=slice(lat_min, lat_max), lon=slice(lon_min, lon_max))
+    # target=target.slice(lat=slice(lat_min, lat_max), lon=slice(lon_min, lon_max))
+
+    
     loss = (prediction - target)**2
     loss *= normalized_latitude_weights(target).astype(loss.dtype)
     if 'level' in target.dims:

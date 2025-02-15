@@ -9,6 +9,10 @@ __pycache__/
 *.py[cod]
 *$py.class
 
+gc_weights/
+era5_data/
+imerg_data
+
 # C extensions
 *.so
 

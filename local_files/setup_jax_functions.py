@@ -2,6 +2,9 @@
 import functools
 import haiku as hk
 import jax
+import sys
+import os
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 from graphcast import casting, normalization, autoregressive, xarray_tree, xarray_jax, graphcast
 from run_graphcast_train_one_step import mean_by_level, stddev_by_level, diffs_stddev_by_level, model_config, task_config, params, state
 
@@ -57,15 +60,12 @@ def loss_fn(model_config, task_config, inputs, targets, forcings):
       lambda x: xarray_jax.unwrap_data(x.mean(), require_jax=True),
       (loss, diagnostics))
 
-def grads_fn(params, state, model_config, task_config, inputs, targets, forcings):
-  def _aux(params, state, i, t, f):
-    (loss, diagnostics), next_state = loss_fn.apply(
-        params, state, jax.random.PRNGKey(0), model_config, task_config,
-        i, t, f)
-    return loss, (diagnostics, next_state)
-  (loss, (diagnostics, next_state)), grads = jax.value_and_grad(
-      _aux, has_aux=True)(params, state, inputs, targets, forcings)
-  return loss, diagnostics, next_state, grads
+def grads_fn(params, state, inputs, targets, forcings, model_config, task_config):
+    def _aux(params, state, i, t, f):
+        (loss, diagnostics), next_state = loss_fn.apply(params, state, jax.random.PRNGKey(0), model_config, task_config, i, t, f)
+        return loss, (diagnostics, next_state)
+    (loss, (diagnostics, next_state)), grads = jax.value_and_grad(_aux, has_aux=True)(params, state, inputs, targets, forcings)
+    return loss, diagnostics, next_state, grads
 
 # Jax doesn't seem to like passing configs as args through the jit. Passing it
 # in via partial (instead of capture by closure) forces jax to invalidate the
@@ -96,3 +96,5 @@ loss_fn_jitted = drop_state(with_params(jax.jit(with_configs(loss_fn.apply))))
 grads_fn_jitted = with_params(jax.jit(with_configs(grads_fn)))
 run_forward_jitted = drop_state(with_params(jax.jit(with_configs(
     run_forward.apply))))"""
+
+

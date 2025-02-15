@@ -5,8 +5,10 @@ import xarray
 import numpy as np
 import pandas as pd
 import jax
+import optax
 import setup_jax_functions
 from graphcast import checkpoint, data_utils, rollout, graphcast
+from datetime import datetime
 
 
 mean_by_level = None
@@ -97,11 +99,11 @@ def main():
 
     args = parser.parse_args()
     if args.model_levels == 37:
-      filename = 'gc_weights/graphcast_0.25_37.npz'
+      filename = '../gc_weights/graphcast_0.25_37.npz'
     elif args.model_resolution == 0.25:
-      filename = 'gc_weights/graphcast_0.25_13.npz'
+      filename = '../gc_weights/graphcast_0.25_13.npz'
     else:
-      filename = 'gc_weights/graphcast_1_13.npz'
+      filename = '../gc_weights/graphcast_1_13.npz'
     with open(filename, 'rb') as f:
       ckpt = checkpoint.load(f, graphcast.CheckPoint)
     params = ckpt.params
@@ -117,7 +119,14 @@ def main():
     setup_jax_functions.configs['stddev_by_level'] = stddev_by_level
     setup_jax_functions.configs['diffs_stddev_by_level'] = diffs_stddev_by_level
     setup_jax_functions.configs['mean_by_level'] = mean_by_level
-    example_batch =  generate_sample_era5_dataset(model_config=model_config, task_config=task_config)
+
+
+
+    # example_batch =  generate_sample_era5_dataset(model_config=model_config, task_config=task_config)
+
+    with open('../era5_data/graphcast_dataset_source-era5_date-2022-01-01_res-1.0_levels-13_steps-04.nc', 'rb') as f:
+      example_batch = xarray.load_dataset(f).compute()
+
     assert example_batch.dims["time"] >= 3
 
     train_inputs, train_targets, train_forcings = data_utils.extract_inputs_targets_forcings(
@@ -172,28 +181,96 @@ def main():
     targets_template=eval_targets * np.nan,
     forcings=eval_forcings)
     print(predictions)
+
+    
     loss, diagnostics = loss_fn_jitted(
     rng=jax.random.PRNGKey(0),
     inputs=train_inputs,
     targets=train_targets,
     forcings=train_forcings)
-    print("Loss:", float(loss))
-    loss, diagnostics, next_state, grads = grads_fn_jitted(
-    inputs=train_inputs,
-    targets=train_targets,
-    forcings=train_forcings)
-    mean_grad = np.mean(jax.tree_util.tree_flatten(jax.tree_util.tree_map(lambda x: np.abs(x).mean(), grads))[0])
-    print(f"Loss: {loss:.4f}, Mean |grad|: {mean_grad:.6f}")
-    print("Inputs:  ", train_inputs.dims.mapping)
-    print("Targets: ", train_targets.dims.mapping)
-    print("Forcings:", train_forcings.dims.mapping)
+    print("Loss with old params:", float(loss))
 
-    predictions = run_forward_jitted(
+
+
+    # setup optimiser
+    lr = 1e-3
+    optimiser = optax.adam(lr, b1=0.9, b2=0.999, eps=1e-8)
+    old_params = params
+    opt_state = optimiser.init(old_params)
+
+    # calculate loss and gradients
+
+    grads_fn_jitted = jax.jit(setup_jax_functions.with_configs(setup_jax_functions.grads_fn))
+    loss, diagnostics, next_state, grads = grads_fn_jitted(old_params, state, train_inputs, train_targets, train_forcings)
+
+    # update
+    updates, opt_state = optimiser.update(grads, opt_state)
+    new_params = optax.apply_updates(old_params, updates)
+
+
+    current_date = datetime.now().strftime("%Y-%m-%d_%H-%M")
+    print(f"Optax apply updates done at {current_date}")
+
+    current_date = datetime.now().strftime("%Y-%m-%d_%H-%M")
+    with open(f'./new_params{current_date}.npz', 'wb') as f:
+      np.savez(f, **new_params)
+
+    
+    targets_template = eval_targets * np.nan
+    
+    old_predictions = run_forward_jitted(
         rng=jax.random.PRNGKey(0),
-        inputs=train_inputs,
-        targets_template=train_targets * np.nan,
-        forcings=train_forcings)
-    print(predictions)
+        inputs=eval_inputs,
+        targets_template=targets_template,
+        forcings=eval_forcings,
+        params=old_params,
+        state=state
+    )
+
+    current_date = datetime.now().strftime("%Y-%m-%d_%H-%M")
+    print(f"Old param predictions done at {current_date}")
+
+
+    new_predictions = run_forward_jitted(
+        rng=jax.random.PRNGKey(0),
+        inputs=eval_inputs,
+        targets_template=targets_template,
+        forcings=eval_forcings,
+        params=new_params,
+        state=state
+    )
+
+    current_date = datetime.now().strftime("%Y-%m-%d_%H-%M")
+    print(f"New param predictions done at {current_date}")
+
+    old_predictions.to_netcdf(f'./old_predictions_{current_date}.nc')
+    new_predictions.to_netcdf(f'./new_predictions_{current_date}.nc')
+
+
+
+
+    # loss, diagnostics, next_state, grads = grads_fn_jitted(
+    # inputs=train_inputs,
+    # targets=train_targets,
+    # forcings=train_forcings)
+
+
+    # mean_grad = np.mean(jax.tree_util.tree_flatten(jax.tree_util.tree_map(lambda x: np.abs(x).mean(), grads))[0])
+
+
+    # print(f"Loss: {loss:.4f}, Mean |grad|: {mean_grad:.6f}")
+    # print("Inputs:  ", train_inputs.dims.mapping)
+    # print("Targets: ", train_targets.dims.mapping)
+    # print("Forcings:", train_forcings.dims.mapping)
+
+    # predictions = run_forward_jitted(
+    #     rng=jax.random.PRNGKey(0),
+    #     inputs=train_inputs,
+    #     targets_template=train_targets * np.nan,
+    #     forcings=train_forcings)
+    # print(predictions)
+
+    print("FINISHED")
 
 if __name__=="__main__":
   main()
