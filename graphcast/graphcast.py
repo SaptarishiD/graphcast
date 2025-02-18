@@ -395,7 +395,7 @@ class GraphCast(predictor_base.Predictor):
       forcings: xarray.Dataset,
       ) -> tuple[predictor_base.LossAndDiagnostics, xarray.Dataset]:
     # Forward pass.
-    jax.debug.print("In graphcast.py")
+    # jax.debug.print("In graphcast.py")
     predictions = self(
         inputs, targets_template=targets, forcings=forcings, is_training=True)
     # Compute loss.
@@ -415,6 +415,10 @@ class GraphCast(predictor_base.Predictor):
             "mean_sea_level_pressure": 0.1,
             "total_precipitation_6hr": 0.1,
         })
+    
+    print(f"\n\nLoss 0 in graphcast.py: {loss[0]}\n\n")
+    print(f"\n\nLoss 1 in graphcast.py: {loss[1]}\n\n")
+    print(f"\n\nPredictions in graphcast.py: {predictions['total_precipitation_6hr']}\n\n")
     return loss, predictions  # pytype: disable=bad-return-type  # jax-ndarray
 
   def loss(  # pytype: disable=signature-mismatch  # jax-ndarray

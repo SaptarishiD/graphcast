@@ -1,3 +1,4 @@
+#<loading_model.py>
 import graphcast
 from dataclasses import dataclass
 from typing import Optional, List, Dict, Any
@@ -81,8 +82,8 @@ def load_model_config(
         model_config = ckpt.model_config
         task_config = ckpt.task_config
         
-        print("Model description:\n", ckpt.description, "\n")
-        print("Model license:\n", ckpt.license, "\n")
+        # print("Model description:\n", ckpt.description, "\n")
+        # print("Model license:\n", ckpt.license, "\n")
         
     return params, state, model_config, task_config
 
@@ -116,3 +117,4 @@ params, state, model_config, task_config = load_model_config(
     random_config=random_config
 )
 """
+#</loading_model.py>

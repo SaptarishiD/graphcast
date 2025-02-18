@@ -1,3 +1,4 @@
+#<save_params_utils.py>
 import jax.numpy as jnp
 import numpy as np
 import os
@@ -19,3 +20,5 @@ def save_model_params(d, file_path):
     np_dict = {k: np.array(v) if isinstance(v, jnp.ndarray) else v for k, v in flat_dict.items()}
     os.makedirs(os.path.dirname(file_path), exist_ok=True)
     np.savez(file_path, **np_dict)
+
+#</save_params_utils.py>

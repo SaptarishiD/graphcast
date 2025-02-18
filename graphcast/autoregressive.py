@@ -141,7 +141,7 @@ class Predictor(predictor_base.Predictor):
                        f'forcings, which isn\'t allowed: {overlap}')
 
   def _update_inputs(self, inputs, next_frame):
-    num_inputs = inputs.dims['time']
+    num_inputs = inputs.sizes['time']
 
     predicted_or_forced_inputs = next_frame[list(inputs.keys())]
 
@@ -228,7 +228,7 @@ class Predictor(predictor_base.Predictor):
       return next_inputs, flat_pred
 
     if self._gradient_checkpointing:
-      scan_length = targets_template.dims['time']
+      scan_length = targets_template.sizes['time']
       if scan_length <= 1:
         logging.warning(
             'Skipping gradient checkpointing for sequence length of 1')
@@ -257,13 +257,21 @@ class Predictor(predictor_base.Predictor):
            **kwargs
            ) -> predictor_base.LossAndDiagnostics:
     """The mean of the per-timestep losses of the underlying predictor."""
-    jax.debug.print("In loss() of autoregressive.py")
+    # jax.debug.print("In loss() of autoregressive.py")
     if targets.sizes['time'] == 1:
       # If there is only a single target timestep then we don't need any
       # autoregressive feedback and can delegate the loss directly to the
       # underlying single-step predictor. This means the underlying predictor
       # doesn't need to implement .loss_and_predictions.
-      return self._predictor.loss(inputs, targets, forcings, **kwargs)
+      print(f'\n\nOnly one timestep\n\n')
+      result = self._predictor.loss(inputs, targets, forcings, **kwargs)
+      print(f"Result 0 in only one timestep: {type(result[0])}")
+      print(f"Result 1 in only one timestep: {type(result[1])}")
+
+      # result[0].to_netcdf("./one_timestep_result0.nc")
+      # result[1].to_netcdf("./one_timestep_result1.nc")
+      print(f"Saved Files")
+      return result
 
     constant_inputs = self._get_and_validate_constant_inputs(
         inputs, targets, forcings)
@@ -340,5 +348,10 @@ class Predictor(predictor_base.Predictor):
         lambda x: xarray_jax.DataArray(x, dims=('time', 'batch')).mean(  # pylint: disable=g-long-lambda
             'time', skipna=False),
         (per_timestep_losses, per_timestep_diagnostics))
+
+
+    
+    print(f"\n\n Loss in autoregressive.py: {loss.data}\n")
+    print(f"\n Diag in autoregressive.py: {per_timestep_diagnostics}\n")
 
     return loss, diagnostics

@@ -1,4 +1,5 @@
-# @title Build jitted functions, and possibly initialize random weights
+#<setup_jax_functions.py>
+# Build jitted functions, and possibly initialize random weights
 import functools
 import haiku as hk
 import jax
@@ -7,6 +8,9 @@ import os
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 from graphcast import casting, normalization, autoregressive, xarray_tree, xarray_jax, graphcast
 from run_graphcast_train_one_step import mean_by_level, stddev_by_level, diffs_stddev_by_level, model_config, task_config, params, state
+
+import jax
+jax.config.update('jax_disable_jit', True)
 
 configs = {}
 
@@ -56,6 +60,28 @@ def run_forward(model_config, task_config, inputs, targets_template, forcings):
 def loss_fn(model_config, task_config, inputs, targets, forcings):
   predictor = construct_wrapped_graphcast(model_config, task_config)
   loss, diagnostics = predictor.loss(inputs, targets, forcings)
+
+
+  # print(f"\n ========== Loss in setup_jax_functions.py loss_fn():\n {loss}\n ==========")
+  # print("\n Loss type: {}, shape: {}".format(type(loss), loss.shape))
+
+  actual_loss_values = jax.device_get(loss)
+
+  # actual_loss_values.to_netcdf("actual_loss_vals_setupjaxfuncs.nc")
+
+
+
+  # print("\n Actual loss values in setup_jax_functions: {}".format(actual_loss_values))
+  # print(f"\n ========== Diagnostics in setup_jax_functions.py loss_fn():\n {loss}\n ==========")
+
+  print("\n Loss array.data.jax_array: {}\n".format(loss.data.jax_array))
+
+  print("\n Diag dataset.data_vars: {}\n".format(diagnostics.data_vars))
+
+  print("\n Diag dataset.variables: {}\n".format(diagnostics.variables))
+
+
+  # print(f"\n Diagnostics type: {type(diagnostics)}")
   return xarray_tree.map_structure(
       lambda x: xarray_jax.unwrap_data(x.mean(), require_jax=True),
       (loss, diagnostics))
@@ -98,3 +124,4 @@ run_forward_jitted = drop_state(with_params(jax.jit(with_configs(
     run_forward.apply))))"""
 
 
+#</setup_jax_functions.py>

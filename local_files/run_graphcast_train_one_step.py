@@ -1,3 +1,4 @@
+#<run_graphcast_train_one_step.py>
 import argparse
 import os
 os.environ['XLA_PYTHON_CLIENT_MEM_FRACTION'] = '2.0'
@@ -10,6 +11,9 @@ import optax
 import setup_jax_functions
 from graphcast import checkpoint, data_utils, rollout, graphcast
 from datetime import datetime
+
+
+jax.config.update('jax_disable_jit', True)
 
 
 mean_by_level = None
@@ -25,7 +29,7 @@ def generate_sample_era5_dataset(
     date='2022-01-01', 
     model_config = None,
     task_config = None,
-    time_steps=3
+    time_steps=4
 ):
     """
     Generate a sample ERA5 dataset with random values matching original specifications.
@@ -47,7 +51,7 @@ def generate_sample_era5_dataset(
     # level_values = np.array([1, 2, 3, 5, 7, 10, 20, 30, 50, 70, 100, 125, 150, 175, 200, 
     #                           225, 250, 300, 350, 400, 450, 500, 550, 600, 650, 700, 
     #                           750, 775, 800, 825, 850, 875, 900, 925, 950, 975, 1000])
-    times = pd.timedelta_range(start='0 days', periods=time_steps, freq='6H')
+    times = pd.timedelta_range(start='0 days', periods=time_steps, freq='6h')
     
     base_datetime = pd.to_datetime(date)
 
@@ -107,12 +111,14 @@ def main():
       filename = '../gc_weights/graphcast_1_13.npz'
     with open(filename, 'rb') as f:
       ckpt = checkpoint.load(f, graphcast.CheckPoint)
+
     params = ckpt.params
+
     state = {}
     model_config = ckpt.model_config
     print(model_config)
     task_config = ckpt.task_config
-    print(task_config)
+    # print(task_config)
     setup_jax_functions.configs['model_config'] = model_config
     setup_jax_functions.configs['task_config'] = task_config
     setup_jax_functions.configs['state'] = state
@@ -123,33 +129,43 @@ def main():
 
 
 
-    # example_batch =  generate_sample_era5_dataset(model_config=model_config, task_config=task_config)
+    example_batch =  generate_sample_era5_dataset(model_config=model_config, task_config=task_config)
 
-    with open('../era5_data/graphcast_dataset_source-era5_date-2022-01-01_res-1.0_levels-13_steps-04.nc', 'rb') as f:
-      example_batch = xarray.load_dataset(f).compute()
+    # with open('../era5_data/graphcast_dataset_source-era5_date-2022-01-01_res-1.0_levels-13_steps-04.nc', 'rb') as f:
+      # example_batch = xarray.load_dataset(f).compute()
 
-    assert example_batch.dims["time"] >= 3
+    assert example_batch.sizes["time"] >= 3
 
+
+
+    train_steps = 1
+    eval_steps = 2
     train_inputs, train_targets, train_forcings = data_utils.extract_inputs_targets_forcings(
-    example_batch, target_lead_times=slice("6h", f"{6}h"),
+    example_batch, target_lead_times=slice("6h", f"{train_steps*6}h"),
     **dataclasses.asdict(task_config))
 
     eval_inputs, eval_targets, eval_forcings = data_utils.extract_inputs_targets_forcings(
-        example_batch, target_lead_times=slice("6h", f"{6}h"),
+        example_batch, target_lead_times=slice("6h", f"{eval_steps*6}h"),
         **dataclasses.asdict(task_config))
-    print("All Examples:  ", example_batch.dims.mapping)
-    print("Train Inputs:  ", train_inputs.dims.mapping)
-    print("Train Targets: ", train_targets.dims.mapping)
-    print("Train Forcings:", train_forcings.dims.mapping)
-    print("Eval Inputs:   ", eval_inputs.dims.mapping)
-    print("Eval Targets:  ", eval_targets.dims.mapping)
-    print("Eval Forcings: ", eval_forcings.dims.mapping)
-    with open('diffs_stddev_by_level.nc', 'rb') as f:
+    
+
+    # print("All Examples:  ", example_batch.dims.mapping)
+    # print("Train Inputs:  ", train_inputs.dims.mapping)
+    # print("Train Targets: ", train_targets.dims.mapping)
+    # print("Train Forcings:", train_forcings.dims.mapping)
+    # print("Eval Inputs:   ", eval_inputs.dims.mapping)
+    # print("Eval Targets:  ", eval_targets.dims.mapping)
+    # print("Eval Forcings: ", eval_forcings.dims.mapping)
+
+
+    with open('netcdf_files/diffs_stddev_by_level.nc', 'rb') as f:
       diffs_stddev_by_level = xarray.load_dataset(f).compute()
-    with open('stddev_by_level.nc', 'rb') as f:
+    with open('netcdf_files/stddev_by_level.nc', 'rb') as f:
       stddev_by_level = xarray.load_dataset(f).compute()
-    with open('mean_by_level.nc', 'rb') as f:
+    with open('netcdf_files/mean_by_level.nc', 'rb') as f:
       mean_by_level = xarray.load_dataset(f).compute()
+
+
     setup_jax_functions.update_configs({
         'params': ckpt.params,
         'state': {},
@@ -167,9 +183,13 @@ def main():
           inputs=train_inputs,
           targets_template=train_targets,
           forcings=train_forcings)
-    print(example_batch)
-    print(train_inputs)
-    print(eval_inputs)
+      
+
+    # print(example_batch)
+    # print(train_inputs)
+    # print(eval_inputs)
+
+
     loss_fn_jitted = setup_jax_functions.drop_state(setup_jax_functions.with_params(jax.jit(setup_jax_functions.with_configs(setup_jax_functions.loss_fn.apply))))
     grads_fn_jitted = setup_jax_functions.with_params(jax.jit(setup_jax_functions.with_configs(setup_jax_functions.grads_fn)))
     run_forward_jitted = setup_jax_functions.drop_state(setup_jax_functions.with_params(jax.jit(setup_jax_functions.with_configs(
@@ -181,7 +201,9 @@ def main():
     inputs=eval_inputs,
     targets_template=eval_targets * np.nan,
     forcings=eval_forcings)
-    print(predictions)
+
+
+    # print(predictions)
 
     
     loss, diagnostics = loss_fn_jitted(
@@ -189,32 +211,28 @@ def main():
     inputs=train_inputs,
     targets=train_targets,
     forcings=train_forcings)
-    print("Loss with old params:", float(loss))
 
+    # print("Loss with old params:", float(loss))
 
-
-    # setup optimiser
     lr = 1e-3
     optimiser = optax.adam(lr, b1=0.9, b2=0.999, eps=1e-8)
     old_params = params
     opt_state = optimiser.init(old_params)
 
-    # calculate loss and gradients
-
     grads_fn_jitted = jax.jit(setup_jax_functions.with_configs(setup_jax_functions.grads_fn))
     loss, diagnostics, next_state, grads = grads_fn_jitted(old_params, state, train_inputs, train_targets, train_forcings)
 
-    # update
+
     updates, opt_state = optimiser.update(grads, opt_state)
     new_params = optax.apply_updates(old_params, updates)
 
 
     current_date = datetime.now().strftime("%Y-%m-%d_%H-%M")
-    print(f"Optax apply updates done at {current_date}")
+    # print(f"Optax apply updates done at {current_date}")
 
     current_date = datetime.now().strftime("%Y-%m-%d_%H-%M")
-    with open(f'./new_params{current_date}.npz', 'wb') as f:
-      np.savez(f, **new_params)
+    # with open(f'./new_params{current_date}.npz', 'wb') as f:
+    #   np.savez(f, **new_params)
 
     
     targets_template = eval_targets * np.nan
@@ -229,7 +247,7 @@ def main():
     )
 
     current_date = datetime.now().strftime("%Y-%m-%d_%H-%M")
-    print(f"Old param predictions done at {current_date}")
+    # print(f"Old param predictions done at {current_date}")
 
 
     new_predictions = run_forward_jitted(
@@ -242,12 +260,10 @@ def main():
     )
 
     current_date = datetime.now().strftime("%Y-%m-%d_%H-%M")
-    print(f"New param predictions done at {current_date}")
+    # print(f"New param predictions done at {current_date}")
 
-    old_predictions.to_netcdf(f'./old_predictions_{current_date}.nc')
-    new_predictions.to_netcdf(f'./new_predictions_{current_date}.nc')
-
-
+    # old_predictions.to_netcdf(f'./old_predictions_{current_date}.nc')
+    # new_predictions.to_netcdf(f'./new_predictions_{current_date}.nc')
 
 
     # loss, diagnostics, next_state, grads = grads_fn_jitted(
@@ -289,3 +305,5 @@ predictions = rollout.chunked_prediction(
     inputs=eval_inputs,
     targets_template=eval_targets * np.nan,
     forcings=eval_forcings)"""
+
+#</run_graphcast_train_one_step.py>

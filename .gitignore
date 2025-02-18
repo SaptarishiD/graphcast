@@ -11,7 +11,9 @@ __pycache__/
 
 gc_weights/
 era5_data/
-imerg_data
+imerg_data/
+local_files/netcdf_files
+local_files/params
 
 # C extensions
 *.so

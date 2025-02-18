@@ -60,26 +60,34 @@ def weighted_mse_per_level(
     per_variable_weights: Mapping[str, float],
 ) -> LossAndDiagnostics:
   """Latitude- and pressure-level-weighted MSE loss."""
-  jax.debug.print("In losses.py")
+  # jax.debug.print("In losses.py weighted MSE per level")
   
-  lat_min, lat_max = 8.0, 37.0
-  lon_min, lon_max = 68.0, 97.0
+  # lat_min, lat_max = 8.0, 37.0
+  # lon_min, lon_max = 68.0, 97.0
+
+  precipitation_var = 'total_precipitation_6hr'
+
+  predictions_ppt = predictions[precipitation_var]
+  targets_ppt = targets[precipitation_var]
 
   def loss(prediction, target):
-    # prediction=prediction.slice(lat=slice(lat_min, lat_max), lon=slice(lon_min, lon_max))
-    # target=target.slice(lat=slice(lat_min, lat_max), lon=slice(lon_min, lon_max))
-
-    jax.debug.print("\n\nIn loss function ppt: \n")
-    print(predictions['total_precipitation_6hr'])
-
-    
     loss = (prediction - target)**2
     loss *= normalized_latitude_weights(target).astype(loss.dtype)
+
+    # print(f"Target Dims in loss fn(): {target.dims}")
+
     if 'level' in target.dims:
       loss *= normalized_level_weights(target).astype(loss.dtype)
     return _mean_preserving_batch(loss)
 
   losses = xarray_tree.map_structure(loss, predictions, targets)
+
+  # print(f'New losses dir :\n {dir(losses)}')
+  # print(f'Per Variable Weights:\n {per_variable_weights}')
+
+  sum_per_var = sum_per_variable_losses(losses, per_variable_weights)
+  # print("\n\n In losses.py loss fn(): \n\n")
+  # print(sum_per_var)
   return sum_per_variable_losses(losses, per_variable_weights)
 
 
@@ -92,6 +100,8 @@ def sum_per_variable_losses(
     weights: Mapping[str, float],
 ) -> LossAndDiagnostics:
   """Weighted sum of per-variable losses."""
+  # print(f"Weights Keys: {weights.keys()}")
+  # print(f"Per Var Losses Keys: {per_variable_losses.keys()}")
   if not set(weights.keys()).issubset(set(per_variable_losses.keys())):
     raise ValueError(
         'Passing a weight that does not correspond to any variable '
@@ -101,9 +111,18 @@ def sum_per_variable_losses(
       name: loss * weights.get(name, 1)
       for name, loss in per_variable_losses.items()
   }
+
+  for name, loss in per_variable_losses.items():
+    print(f"Name in sumpervar: {name}")
+    print(f"Loss in sumpervar: {loss}")
+
+
+
   total = xarray.concat(
       weighted_per_variable_losses.values(), dim='variable', join='exact').sum(
           'variable', skipna=False)
+  print(f"\n\n Total in sum_per_var = {total}")
+  print(f"\n per_var_losses = {per_variable_losses}")
   return total, per_variable_losses  # pytype: disable=bad-return-type
 
 

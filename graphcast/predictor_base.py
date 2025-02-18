@@ -127,7 +127,7 @@ class Predictor(abc.ABC):
         you.
     """
     del targets, forcings, optional_kwargs
-    jax.debug.print("In loss() of predictor_base.py")
+    # jax.debug.print("In loss() of predictor_base.py")
     batch_size = inputs.sizes['batch']
     dummy_loss = xarray_jax.DataArray(jnp.zeros(batch_size), dims=('batch',))
     return dummy_loss, {}  # pytype: disable=bad-return-type
@@ -139,7 +139,7 @@ class Predictor(abc.ABC):
       forcings: xarray.Dataset,
       **optional_kwargs,
       ) -> Tuple[LossAndDiagnostics, xarray.Dataset]:
-    jax.debug.print("In loss_and_predictions() of predictor_base.py")
+    # jax.debug.print("In loss_and_predictions() of predictor_base.py")
     """Like .loss but also returns corresponding predictions.
 
     Implementing this is optional as it's not used directly by the Experiment,

@@ -1,3 +1,4 @@
+#<gcs_downloader.py>
 import os
 from pathlib import Path
 import xarray
@@ -99,7 +100,8 @@ if __name__ == "__main__":
     
     # Load and print basic info about the statistics
     stats = load_statistics(args.local_dir)
-    print("\nStatistics loaded successfully:")
-    print(f"Diffs StdDev shape: {stats.diffs_stddev_by_level.dims}")
-    print(f"Means shape: {stats.mean_by_level.dims}")
-    print(f"StdDev shape: {stats.stddev_by_level.dims}")
+    # print("\nStatistics loaded successfully:")
+    # print(f"Diffs StdDev shape: {stats.diffs_stddev_by_level.dims}")
+    # print(f"Means shape: {stats.mean_by_level.dims}")
+    # print(f"StdDev shape: {stats.stddev_by_level.dims}")
+#</gcs_downloader.py>
