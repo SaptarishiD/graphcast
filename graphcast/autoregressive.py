@@ -263,10 +263,10 @@ class Predictor(predictor_base.Predictor):
       # autoregressive feedback and can delegate the loss directly to the
       # underlying single-step predictor. This means the underlying predictor
       # doesn't need to implement .loss_and_predictions.
-      print(f'\n\nOnly one timestep\n\n')
+      # print(f'\n\nOnly one timestep\n\n')
       result = self._predictor.loss(inputs, targets, forcings, **kwargs)
-      print(f"Result 0 in only one timestep: {type(result[0])}")
-      print(f"Result 1 in only one timestep: {type(result[1])}")
+      # print(f"Result 0 in only one timestep: {type(result[0])}")
+      # print(f"Result 1 in only one timestep: {type(result[1])}")
 
       # result[0].to_netcdf("./one_timestep_result0.nc")
       # result[1].to_netcdf("./one_timestep_result1.nc")
@@ -351,7 +351,7 @@ class Predictor(predictor_base.Predictor):
 
 
     
-    print(f"\n\n Loss in autoregressive.py: {loss.data}\n")
-    print(f"\n Diag in autoregressive.py: {per_timestep_diagnostics}\n")
+    # print(f"\n\n Loss in autoregressive.py: {loss.data}\n")
+    # print(f"\n Diag in autoregressive.py: {per_timestep_diagnostics}\n")
 
     return loss, diagnostics

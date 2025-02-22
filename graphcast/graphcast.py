@@ -396,30 +396,43 @@ class GraphCast(predictor_base.Predictor):
       ) -> tuple[predictor_base.LossAndDiagnostics, xarray.Dataset]:
     # Forward pass.
     # jax.debug.print("In graphcast.py")
-    predictions = self(
+    predictions: xarray.Dataset = self(
         inputs, targets_template=targets, forcings=forcings, is_training=True)
-    # Compute loss.
-    loss = losses.weighted_mse_per_level(
-        predictions, targets,
-        per_variable_weights={
-            # Any variables not specified here are weighted as 1.0.
-            # A single-level variable, but an important headline variable
-            # and also one which we have struggled to get good performance
-            # on at short lead times, so leaving it weighted at 1.0, equal
-            # to the multi-level variables:
-            "2m_temperature": 1.0,
-            # New single-level variables, which we don't weight too highly
-            # to avoid hurting performance on other variables.
-            "10m_u_component_of_wind": 0.1,
-            "10m_v_component_of_wind": 0.1,
-            "mean_sea_level_pressure": 0.1,
-            "total_precipitation_6hr": 0.1,
-        })
     
-    print(f"\n\nLoss 0 in graphcast.py: {loss[0]}\n\n")
-    print(f"\n\nLoss 1 in graphcast.py: {loss[1]}\n\n")
-    print(f"\n\nPredictions in graphcast.py: {predictions['total_precipitation_6hr']}\n\n")
-    return loss, predictions  # pytype: disable=bad-return-type  # jax-ndarray
+    
+    # Compute loss.
+
+
+    # loss = losses.weighted_mse_per_level(
+    #     predictions, targets,
+    #     per_variable_weights={
+    #         # Any variables not specified here are weighted as 1.0.
+    #         # A single-level variable, but an important headline variable
+    #         # and also one which we have struggled to get good performance
+    #         # on at short lead times, so leaving it weighted at 1.0, equal
+    #         # to the multi-level variables:
+    #         "2m_temperature": 1.0,
+    #         # New single-level variables, which we don't weight too highly
+    #         # to avoid hurting performance on other variables.
+    #         "10m_u_component_of_wind": 0.1,
+    #         "10m_v_component_of_wind": 0.1,
+    #         "mean_sea_level_pressure": 0.1,
+    #         "total_precipitation_6hr": 0.1,
+    #     })
+
+    loss, diagnostics = losses.weighted_mse_precipitation_india(predictions, targets)
+
+    # loss, diagnostics = losses.weighted_mse_precipitation(predictions, targets)
+
+    
+    # print(f"\n\nLoss 0 in graphcast.py: {loss[0]}\n\n")
+    # print(f"\n\nLoss 1 in graphcast.py: {loss[1]}\n\n")
+    # print(f"\n\nPredictions in graphcast.py: {predictions['total_precipitation_6hr']}\n\n")
+
+
+    # return loss, predictions  # pytype: disable=bad-return-type  # jax-ndarray
+
+    return (loss, diagnostics), predictions
 
   def loss(  # pytype: disable=signature-mismatch  # jax-ndarray
       self,

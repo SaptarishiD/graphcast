@@ -12,6 +12,10 @@ import setup_jax_functions
 from graphcast import checkpoint, data_utils, rollout, graphcast
 from datetime import datetime
 
+from plotting import scale, select, plot_data, save_animation, save_static_plot
+
+from metrics import compute_rmse, compute_mae, compute_bias, compute_acc
+
 
 jax.config.update('jax_disable_jit', True)
 
@@ -23,6 +27,10 @@ model_config = None
 task_config = None
 params = None
 state = None
+
+
+# def diff_predictions(new_predictions: xarray.Dataset, old_predictions: xarray:Dataset):
+
 
 
 def generate_sample_era5_dataset(
@@ -87,6 +95,8 @@ def generate_sample_era5_dataset(
     
     return ds
 
+
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--model_levels', default=13, type=int, choices=[13, 37], help='Number of Pressure Levels')
@@ -129,16 +139,16 @@ def main():
 
 
 
-    example_batch =  generate_sample_era5_dataset(model_config=model_config, task_config=task_config)
+    # example_batch =  generate_sample_era5_dataset(model_config=model_config, task_config=task_config)
 
-    # with open('../era5_data/graphcast_dataset_source-era5_date-2022-01-01_res-1.0_levels-13_steps-04.nc', 'rb') as f:
-      # example_batch = xarray.load_dataset(f).compute()
+    with open('../era5_data/graphcast_dataset_source-era5_date-2022-01-01_res-1.0_levels-13_steps-04.nc', 'rb') as f:
+      example_batch = xarray.load_dataset(f).compute()
 
     assert example_batch.sizes["time"] >= 3
 
 
 
-    train_steps = 1
+    train_steps = 2
     eval_steps = 2
     train_inputs, train_targets, train_forcings = data_utils.extract_inputs_targets_forcings(
     example_batch, target_lead_times=slice("6h", f"{train_steps*6}h"),
@@ -194,6 +204,20 @@ def main():
     grads_fn_jitted = setup_jax_functions.with_params(jax.jit(setup_jax_functions.with_configs(setup_jax_functions.grads_fn)))
     run_forward_jitted = setup_jax_functions.drop_state(setup_jax_functions.with_params(jax.jit(setup_jax_functions.with_configs(
         setup_jax_functions.run_forward.apply))))
+
+
+      
+    def run_model(params, state, inputs, targets_template, forcings):
+        predictions = run_forward_jitted(
+            rng=jax.random.PRNGKey(0),
+            inputs=inputs,
+            targets_template=targets_template,
+            forcings=forcings,
+            params=params,
+            state=state
+        )
+        return predictions
+
     
     predictions = rollout.chunked_prediction(
     run_forward_jitted,
@@ -232,7 +256,7 @@ def main():
 
     current_date = datetime.now().strftime("%Y-%m-%d_%H-%M")
     # with open(f'./new_params{current_date}.npz', 'wb') as f:
-    #   np.savez(f, **new_params)
+      # np.savez(f, **new_params)
 
     
     targets_template = eval_targets * np.nan
@@ -250,21 +274,101 @@ def main():
     # print(f"Old param predictions done at {current_date}")
 
 
-    new_predictions = run_forward_jitted(
-        rng=jax.random.PRNGKey(0),
-        inputs=eval_inputs,
-        targets_template=targets_template,
-        forcings=eval_forcings,
-        params=new_params,
-        state=state
-    )
+    # new_predictions = run_forward_jitted(
+    #     rng=jax.random.PRNGKey(0),
+    #     inputs=eval_inputs,
+    #     targets_template=targets_template,
+    #     forcings=eval_forcings,
+    #     params=new_params,
+    #     state=state
+    # )
 
-    current_date = datetime.now().strftime("%Y-%m-%d_%H-%M")
-    # print(f"New param predictions done at {current_date}")
+    new_predictions = run_model(new_params, state, eval_inputs, targets_template, eval_forcings)
 
-    # old_predictions.to_netcdf(f'./old_predictions_{current_date}.nc')
-    # new_predictions.to_netcdf(f'./new_predictions_{current_date}.nc')
 
+    latmin = 8
+    latmax = 37
+    lonmin = 68
+    lonmax = 97
+
+    new_predictions_india = new_predictions.sel(lat=slice(latmin, latmax), lon=slice(lonmin, lonmax))
+    old_predictions_india = old_predictions.sel(lat=slice(latmin, latmax), lon=slice(lonmin, lonmax))
+    eval_targets_india = eval_targets.sel(lat=slice(latmin, latmax), lon=slice(lonmin, lonmax))
+
+
+
+    print(f"New param predictions done at {current_date}")
+
+    # old_predictions.to_netcdf(f'netcdf_files/old_predictions_{current_date}.nc')
+    # new_predictions.to_netcdf(f'netcdf_files/new_predictions_{current_date}.nc')
+
+
+    plot_pred_variable = 'total_precipitation_6hr'
+    plot_pred_level = 500
+    plot_pred_max_steps = 5
+    plot_max_steps = min(new_predictions.dims["time"], plot_pred_max_steps)
+
+    print("Predictions time dim: {}".format(new_predictions.dims['time']))
+
+    plot_pred_robust = True
+    
+    data = {
+    "Targets": scale(select(eval_targets_india, plot_pred_variable, plot_pred_level, plot_max_steps), robust=True),
+    "Predictions": scale(select(new_predictions_india, plot_pred_variable, plot_pred_level, plot_max_steps), robust=True),
+    "Diff": scale((select(eval_targets_india, plot_pred_variable, plot_pred_level, plot_max_steps) -
+                        select(new_predictions_india, plot_pred_variable, plot_pred_level, plot_max_steps)),
+                       robust=True, center=0),
+    }
+    
+    fig_title = plot_pred_variable
+    if "level" in predictions[plot_pred_variable].coords:
+      fig_title += f" at {plot_pred_level} hPa"
+    
+    
+    plot_size = 5
+    # put the variable named new_predictions inside the output path
+
+
+    output_path = f"plots/india_new_predictions_plotting_results_{current_date}.gif"
+
+    for i in range(0, plot_max_steps):
+      save_static_plot(data, fig_title, f"plots/india_new_predictions_plotting_results_{current_date}_{i}.png", i, plot_size, plot_pred_robust)
+
+    # save_animation(data, fig_title, output_path ,plot_size, plot_pred_robust)
+    
+    
+    data_old = {
+    "Targets": scale(select(eval_targets_india, plot_pred_variable, plot_pred_level, plot_max_steps), robust=True),
+    "Predictions": scale(select(old_predictions_india, plot_pred_variable, plot_pred_level, plot_max_steps), robust=True),
+    "Diff": scale((select(eval_targets_india, plot_pred_variable, plot_pred_level, plot_max_steps) -
+                        select(old_predictions_india, plot_pred_variable, plot_pred_level, plot_max_steps)),
+                       robust=True, center=0),
+    }
+
+    output_path_old = f"plots/india_old_predictions_plotting_results_{current_date}.gif"
+    
+    for i in range(0, plot_max_steps):
+      save_static_plot(data_old, fig_title, f"plots/india_old_predictions_plotting_results_{current_date}_{i}.png", i, plot_size, plot_pred_robust)
+
+    # save_animation(data_old, fig_title, output_path_old ,plot_size, plot_pred_robust)
+
+    rmse_new = compute_rmse(new_predictions_india, eval_targets_india,plot_pred_variable )
+    print(f"RMSE for new predictions: {rmse_new}")
+    rmse_old = compute_rmse(old_predictions_india, eval_targets_india, plot_pred_variable)
+    print(f"RMSE for old predictions: {rmse_old}")
+
+
+
+    # pred_old_pred_diff = compute_rmse(old_predictions, predictions, 'all')
+    # print("Diff between old_predictions and predictions: {}".format(pred_old_pred_diff))
+
+    # print(pred_old_pred_diff['total_precipitation_6hr'])
+
+
+
+
+    # find the rmse of the new_predictions vs the old_predictions on the ground truth
+    
 
     # loss, diagnostics, next_state, grads = grads_fn_jitted(
     # inputs=train_inputs,

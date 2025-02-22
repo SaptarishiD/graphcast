@@ -14,7 +14,7 @@ era5_data/
 imerg_data/
 local_files/netcdf_files
 local_files/params
-
+local_files/expts
 # C extensions
 *.so
 

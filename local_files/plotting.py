@@ -175,3 +175,65 @@ def save_static_plot(
     # Save the figure
     plt.savefig(output_path, dpi=dpi, bbox_inches='tight')
     plt.close(figure)
+
+
+def plot_data(
+    data: dict[str, Tuple[xarray.Dataset, matplotlib.colors.Normalize, str]],
+    fig_title: str,
+    output_path: str = "./",
+    plot_size: float = 5,
+    robust: bool = False,
+    cols: int = 4
+    ) -> None:
+    """
+    Plots the data in a grid layout and saves the resulting static plot to a file.
+
+    Args:
+        data: Dictionary where each key is a title and each value is a tuple containing:
+              - The plot data as an xarray.Dataset.
+              - A matplotlib.colors.Normalize object for scaling.
+              - A colormap string.
+        fig_title: Title for the figure.
+        output_path: File path to save the plot (any format matplotlib supports).
+        plot_size: Size multiplier for the plot.
+        robust: If True, use robust scaling options.
+        cols: Number of columns in the grid.
+    """
+    first_data = next(iter(data.values()))[0]
+    max_steps = first_data.sizes.get("time", 1)
+    assert all(max_steps == d.sizes.get("time", 1) for d, _, _ in data.values())
+
+    cols = min(cols, len(data))
+    rows = math.ceil(len(data) / cols)
+    figure = plt.figure(figsize=(plot_size * 2 * cols, plot_size * rows))
+    figure.suptitle(fig_title, fontsize=16)
+    figure.subplots_adjust(wspace=0, hspace=0)
+    figure.tight_layout()
+
+    images = []
+    for i, (title, (plot_data, norm, cmap)) in enumerate(data.items()):
+        ax = figure.add_subplot(rows, cols, i+1)
+        ax.set_xticks([])
+        ax.set_yticks([])
+        ax.set_title(title)
+        im = ax.imshow(
+            plot_data.isel(time=0, missing_dims="ignore"), norm=norm,
+            origin="lower", cmap=cmap)
+        plt.colorbar(
+            mappable=im,
+            ax=ax,
+            orientation="vertical",
+            pad=0.02,
+            aspect=16,
+            shrink=0.75,
+            cmap=cmap,
+            extend=("both" if robust else "neither"))
+        images.append(im)
+
+    # Ensure output directory exists
+    output_dir = Path(output_path).parent
+    output_dir.mkdir(parents=True, exist_ok=True)
+    
+    # Save the figure to the specified file
+    plt.savefig("/home/saptarishi.dhanuka_asp25/capstone/graphcast/plotting.png", bbox_inches='tight')
+    plt.close(figure)
