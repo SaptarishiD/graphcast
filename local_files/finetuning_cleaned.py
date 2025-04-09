@@ -1,10 +1,11 @@
 # <finetuning_cleaned.py>
 
 import os
-# os.environ['XLA_PYTHON_CLIENT_MEM_FRACTION'] = '2.0'
 import sys
+
 # graphcast is in the parent directory so insert it into the path
 sys.path.append(os.path.abspath(os.path.join(os.getcwd(), '..')))
+
 import argparse
 import dataclasses
 import xarray
@@ -17,15 +18,13 @@ import optax
 
 from graphcast import checkpoint, data_utils, rollout, graphcast, normalization, testing_path
 import save_params_utils
-
 import setup_jax_functions
 from plotting import scale, select, plot_data, save_animation, save_static_plot
 from metrics import compute_rmse, compute_mae, compute_bias, compute_acc
 
-
 jax.config.update('jax_disable_jit', True)
 
-
+# for memory efficiency
 os.environ['XLA_PYTHON_CLIENT_PREALLOCATE']='false'
 os.environ['XLA_PYTHON_CLIENT_MEM_FRACTION']='.10'
 os.environ["XLA_PYTHON_CLIENT_ALLOCATOR"]="platform"
@@ -37,7 +36,6 @@ model_config = None
 task_config = None
 params = None
 state = None
-
 
 def generate_sample_era5_dataset(
     date='2022-01-01', 
@@ -102,7 +100,7 @@ def generate_sample_era5_dataset(
     return ds
 
 
-# modify the gradients function signature
+# modify the gradients function signature (needed for finetuning with optax)
 def grads_fn(params, state, inputs, targets, forcings, model_config, task_config):
     def _aux(params, state, i, t, f):
         (loss, diagnostics), next_state = setup_jax_functions.loss_fn.apply(params, state, jax.random.PRNGKey(0), model_config, task_config, i, t, f)
@@ -110,32 +108,27 @@ def grads_fn(params, state, inputs, targets, forcings, model_config, task_config
     (loss, (diagnostics, next_state)), grads = jax.value_and_grad(_aux, has_aux=True)(params, state, inputs, targets, forcings)
     return loss, diagnostics, next_state, grads
 
-def FineTuning(train_inputs,train_targets,train_forcings,params):
-
-    # remove `with_params` from jitted grads function
-
-    # setup optimiser
+def finetuning(train_inputs,train_targets,train_forcings,params):
     lr = 1e-4
     optimiser = optax.adam(lr, b1=0.9, b2=0.999, eps=1e-8)
     opt_state = optimiser.init(params)
 
     grads_fn_jitted = jax.jit(setup_jax_functions.with_configs(setup_jax_functions.grads_fn))
-    # calculate loss and gradients
-
+    
     print("Setting up grads function")
+    
     state = {}
     loss, diagnostics, next_state, grads = grads_fn_jitted(params, state, train_inputs, train_targets, train_forcings)
 
     print("Losses calculated, now updating")
 
-    # update
     updates, opt_state = optimiser.update(grads, opt_state)
 
     print("Applying updates")
 
     params = optax.apply_updates(params, updates)
 
-    return params,loss
+    return params, loss
 
 
 def create_input_data(example_batch_, task_config_dict, index=0, lookahead=4):
@@ -153,15 +146,13 @@ def combinedata(first,second):
     return first.merge(second)
 
 
-def train_graphcast(data, params, task_config_dict):
+def train_graphcast(data, params, task_config_dict, epochs=10):
 
     current_date = datetime.now().strftime("%Y-%m-%d_%H-%M")
 
     params_path = os.path.join('/home/saptarishi.dhanuka_asp25/capstone/og_graphcast/local_files/params', f'params_finetune_test{current_date}.npz')
 
-    epochs = 10
-    Loss = []
-
+    loss_tracker = []
     lookahead = 3
 
     for epoch in range(epochs):
@@ -169,7 +160,8 @@ def train_graphcast(data, params, task_config_dict):
 
         for i in range(data.dims.mapping['time']-3):
             print(f'Time Batch number: {i}')
-
+            
+            # batches
             train_inputs, train_targets, train_forcings = create_input_data(data, task_config_dict=task_config_dict, index=i, lookahead = lookahead + 1)
             # combined_data = combiningData(train_targets, train_forcings)
 
@@ -185,9 +177,9 @@ def train_graphcast(data, params, task_config_dict):
             print("Train Targets: ", train_targets_mean_1_day.sizes.mapping)
             print("Train Forcings:", train_forcings_mean_1_day.sizes.mapping)
 
-            params, loss = FineTuning(train_inputs_mean_1_day,train_targets_mean_1_day,train_forcings_mean_1_day, params)
+            params, loss = finetuning(train_inputs_mean_1_day,train_targets_mean_1_day,train_forcings_mean_1_day, params)
             print(f'\n =========== Loss for time batch number: {i} = {loss} =========== \n')
-            Loss.append(loss)
+            loss_tracker.append(loss)
             if i % 5 == 0:
                 save_params_utils.save_model_params(params, f'{params_path}_{i}')
 
@@ -236,8 +228,8 @@ def main():
 
     state = {}
     model_config = ckpt.model_config
-    print(model_config)
     task_config = ckpt.task_config
+    print(model_config)
     print(task_config)
     setup_jax_functions.configs['model_config'] = model_config
     setup_jax_functions.configs['task_config'] = task_config
@@ -273,20 +265,6 @@ def main():
             state=state
         )
         return predictions
-
-
-    state = {}
-    model_config = ckpt.model_config
-    print(model_config)
-    task_config = ckpt.task_config
-    setup_jax_functions.configs['model_config'] = model_config
-    setup_jax_functions.configs['task_config'] = task_config
-    setup_jax_functions.configs['state'] = state
-    setup_jax_functions.configs['params'] = params
-    setup_jax_functions.configs['stddev_by_level'] = stddev_by_level
-    setup_jax_functions.configs['diffs_stddev_by_level'] = diffs_stddev_by_level
-    setup_jax_functions.configs['mean_by_level'] = mean_by_level
-
     
     with open('/home/saptarishi.dhanuka_asp25/capstone/graphcast/era5_data/graphcast_dataset_source-era5_date-2022-01-01_res-1.0_levels-13_steps-12.nc', 'rb') as f:
       print("Loading Dataset")
@@ -307,10 +285,9 @@ def main():
 
     print("Starting training")
 
-    train_graphcast(training_trial_batch, params, task_config_dict)
+    train_graphcast(training_trial_batch, params, task_config_dict, epochs=10)
 
-
-    print("FINISHED")
+    print("Finished training")
 
 if __name__=="__main__":
   main()
