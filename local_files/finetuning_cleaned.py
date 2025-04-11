@@ -16,17 +16,22 @@ from datetime import datetime
 import jax
 import optax
 
-from graphcast import checkpoint, data_utils, rollout, graphcast, normalization, testing_path
+from graphcast import checkpoint, data_utils, rollout, graphcast, normalization
 import save_params_utils
 import setup_jax_functions
 from plotting import scale, select, plot_data, save_animation, save_static_plot
 from metrics import compute_rmse, compute_mae, compute_bias, compute_acc
+import matplotlib.pyplot as plt
+import pynvml
+import time
 
-jax.config.update('jax_disable_jit', True)
+
+
+# jax.config.update('jax_disable_jit', True)
 
 # for memory efficiency
 os.environ['XLA_PYTHON_CLIENT_PREALLOCATE']='false'
-os.environ['XLA_PYTHON_CLIENT_MEM_FRACTION']='.10'
+os.environ['XLA_PYTHON_CLIENT_MEM_FRACTION'] = '2.0' 
 os.environ["XLA_PYTHON_CLIENT_ALLOCATOR"]="platform"
 
 mean_by_level = None
@@ -148,15 +153,36 @@ def combinedata(first,second):
 
 def train_graphcast(data, params, task_config_dict, epochs=10):
 
+    device = jax.devices()[0]
+    print(f"JAX is running on: {device}")
+    pynvml.nvmlInit()
+    handle = pynvml.nvmlDeviceGetHandleByIndex(0)
+
+    gpu_utilization = []
+    gpu_memory = []
+
     current_date = datetime.now().strftime("%Y-%m-%d_%H-%M")
 
-    params_path = os.path.join('/home/saptarishi.dhanuka_asp25/capstone/og_graphcast/local_files/params', f'params_finetune_test{current_date}.npz')
+    params_path = os.path.join('/home/saptarishi.dhanuka_asp25/weather/graphcast_dir/graphcast/local_files/params', f'params_finetune_test{current_date}.npz')
 
     loss_tracker = []
     lookahead = 3
 
+    epoch_batch_loss = []
+
     for epoch in range(epochs):
         print(f'Epoch number {epoch}')
+
+        util = pynvml.nvmlDeviceGetUtilizationRates(handle)
+        mem = pynvml.nvmlDeviceGetMemoryInfo(handle)
+        
+        gpu_utilization.append(util.gpu)           # in percent
+        gpu_memory.append(mem.used / 1024**2)      # in MB
+
+        print(gpu_utilization)
+        print(gpu_memory)
+        
+        time.sleep(1)
 
         for i in range(data.dims.mapping['time']-3):
             print(f'Time Batch number: {i}')
@@ -180,13 +206,50 @@ def train_graphcast(data, params, task_config_dict, epochs=10):
             params, loss = finetuning(train_inputs_mean_1_day,train_targets_mean_1_day,train_forcings_mean_1_day, params)
             print(f'\n =========== Loss for time batch number: {i} = {loss} =========== \n')
             loss_tracker.append(loss)
-            if i % 5 == 0:
+            epoch_batch_loss.append((epoch, i, loss)) 
+            if i % 5 == 0 and i > 0:
                 save_params_utils.save_model_params(params, f'{params_path}_{i}')
 
         print(f'\n =========== Saving model after epoch {epoch} =========== \n')
         save_params_utils.save_model_params(params, params_path)
 
+    pynvml.nvmlShutdown()
+    plot_loss(epoch_batch_loss, current_date)
+    plot_gpu_util(gpu_utilization, gpu_memory, current_date)
 
+def plot_loss(epoch_batch_loss, date):
+    """
+    Plots the loss with epoch and batch number.
+    """
+    epochs = [entry[0] for entry in epoch_batch_loss]
+    batches = [entry[1] for entry in epoch_batch_loss]
+    losses = [entry[2] for entry in epoch_batch_loss]
+
+    plt.figure(figsize=(10, 6))
+    plt.plot(range(len(losses)), losses, label="Loss")
+    plt.xlabel("Epoch and Batch Number (Combined Index)")
+    plt.ylabel("Loss")
+    plt.title("Loss vs Epoch and Batch Number")
+    plt.legend()
+    plt.grid(True)
+    plt.savefig(f"plots/training/loss_plot{date}.png")
+
+def plot_gpu_util(gpu_utilization, gpu_memory, date):
+    plt.figure(figsize=(10, 4))
+    plt.subplot(1, 2, 1)
+    plt.plot(gpu_utilization, label='GPU Utilization (%)')
+    plt.xlabel('Epoch')
+    plt.ylabel('Utilization')
+    plt.legend()
+
+    plt.subplot(1, 2, 2)
+    plt.plot(gpu_memory, label='GPU Memory (MB)', color='orange')
+    plt.xlabel('Epoch')
+    plt.ylabel('Memory Usage')
+    plt.legend()
+
+    plt.tight_layout()
+    plt.savefig(f"plots/training/gpu_utilization_memory_plot{date}.png")
 
 
 
@@ -207,22 +270,39 @@ def main():
 
     args = parser.parse_args()
     if args.model_levels == 37:
-      filename = '/home/saptarishi.dhanuka_asp25/capstone/graphcast/gc_weights/graphcast_0.25_37.npz'
+      filename = '/Datastorage/saptarishi.dhanuka_asp25/gc_weights/graphcast_0.25_37.npz'
+            
     elif args.model_resolution == 0.25:
-      filename = '/home/saptarishi.dhanuka_asp25/capstone/graphcast/gc_weights/graphcast_0.25_13.npz'
+      filename = '/Datastorage/saptarishi.dhanuka_asp25/gc_weights/graphcast_0.25_13.npz'
+      
+      with open(f'/Datastorage/saptarishi.dhanuka_asp25/era5_data/graphcast_dataset_source-era5_date-2022-01-01_res-{args.model_resolution}_levels-13_steps-12.nc', 'rb') as f:
+        print("Loading Dataset")
+        tik = datetime.now()
+        training_trial_batch = xarray.load_dataset(f).compute()
+        tok = datetime.now()
+        print(f"Dataset loaded in {tok - tik}")
+
     else:
-      filename = '/home/saptarishi.dhanuka_asp25/capstone/graphcast/gc_weights/graphcast_1_13.npz'
+        filename = '/Datastorage/saptarishi.dhanuka_asp25/gc_weights/graphcast_1_13.npz'
+        with open('/Datastorage/saptarishi.dhanuka_asp25/era5_data/graphcast_dataset_source-era5_date-2022-01-01_res-1.0_levels-13_steps-12.nc', 'rb') as f:
+            print("Loading Dataset")
+            tik = datetime.now()
+            training_trial_batch = xarray.load_dataset(f).compute()
+            tok = datetime.now()
+            print(f"Dataset loaded in {tok - tik}")
+    
+    
     with open(filename, 'rb') as f:
       ckpt = checkpoint.load(f, graphcast.CheckPoint)
 
     params = ckpt.params
 
 
-    with open('/home/saptarishi.dhanuka_asp25/capstone/graphcast/local_files/netcdf_files/diffs_stddev_by_level.nc', 'rb') as f:
+    with open('/Datastorage/saptarishi.dhanuka_asp25/gc_norms/diffs_stddev_by_level.nc', 'rb') as f:
         diffs_stddev_by_level = xarray.load_dataset(f).compute()
-    with open('/home/saptarishi.dhanuka_asp25/capstone/graphcast/local_files/netcdf_files/stddev_by_level.nc', 'rb') as f:
+    with open('/Datastorage/saptarishi.dhanuka_asp25/gc_norms/stddev_by_level.nc', 'rb') as f:
         stddev_by_level = xarray.load_dataset(f).compute()
-    with open('/home/saptarishi.dhanuka_asp25/capstone/graphcast/local_files/netcdf_files/mean_by_level.nc', 'rb') as f:
+    with open('/Datastorage/saptarishi.dhanuka_asp25/gc_norms/mean_by_level.nc', 'rb') as f:
         mean_by_level = xarray.load_dataset(f).compute()
 
 
@@ -266,12 +346,7 @@ def main():
         )
         return predictions
     
-    with open('/home/saptarishi.dhanuka_asp25/capstone/graphcast/era5_data/graphcast_dataset_source-era5_date-2022-01-01_res-1.0_levels-13_steps-12.nc', 'rb') as f:
-      print("Loading Dataset")
-      tik = datetime.now()
-      training_trial_batch = xarray.load_dataset(f).compute()
-      tok = datetime.now()
-    print(f"Dataset loaded in {tok - tik}")
+
       
 
     # training_trial_batch = generate_sample_era5_dataset(model_config=model_config, task_config=task_config, time_steps = 10)

@@ -327,7 +327,7 @@ class Predictor(predictor_base.Predictor):
       return next_inputs, (loss, diagnostics)
 
     if self._gradient_checkpointing:
-      scan_length = targets.dims['time']
+      scan_length = targets.sizes['time']
       if scan_length <= 1:
         logging.warning(
             'Skipping gradient checkpointing for sequence length of 1')
