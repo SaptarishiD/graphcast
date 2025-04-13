@@ -3,12 +3,14 @@
 import os
 import sys
 
+import logging
+
 # graphcast is in the parent directory so insert it into the path
 sys.path.append(os.path.abspath(os.path.join(os.getcwd(), '..')))
 
 import argparse
 import dataclasses
-import xarray
+import xarray as xr
 import numpy as np
 import pandas as pd
 from datetime import datetime
@@ -59,7 +61,7 @@ def generate_sample_era5_dataset(
     - time_steps: Number of time steps
     
     Returns:
-    xarray.Dataset with random values
+    xr.Dataset with random values
     """
     lons = np.arange(0, 360, model_config.resolution)
     lats = np.arange(-90, 90 + model_config.resolution, model_config.resolution)
@@ -75,7 +77,7 @@ def generate_sample_era5_dataset(
     base_datetime = pd.to_datetime(date)
     datetime_coords = np.array([base_datetime + pd.Timedelta(t) for t in times])
     
-    ds = xarray.Dataset(
+    ds = xr.Dataset(
         data_vars={
             'geopotential_at_surface': (['lat', 'lon'], np.random.uniform(20000, 30000, size=(len(lats), len(lons)))),
             'land_sea_mask': (['lat', 'lon'], np.random.choice([0.0, 1.0], size=(len(lats), len(lons)))),
@@ -125,6 +127,8 @@ def finetuning(train_inputs,train_targets,train_forcings,params):
     state = {}
     loss, diagnostics, next_state, grads = grads_fn_jitted(params, state, train_inputs, train_targets, train_forcings)
 
+    logger = logging.getLogger()
+
     print("Losses calculated, now updating")
 
     updates, opt_state = optimiser.update(grads, opt_state)
@@ -154,14 +158,19 @@ def combinedata(first,second):
 def train_graphcast(data, params, task_config_dict, epochs=10):
 
     device = jax.devices()[0]
-    print(f"JAX is running on: {device}")
+    current_date = datetime.now().strftime("%Y-%m-%d_%H-%M")
+
+    log_file = f"training_logs_{current_date}.log"
+    logging.basicConfig(filename=log_file, level=logging.INFO, format="%(asctime)s - %(message)s")
+    logger = logging.getLogger()
+
+    logger.info(f"JAX is running on: {device}")
     pynvml.nvmlInit()
     handle = pynvml.nvmlDeviceGetHandleByIndex(0)
 
     gpu_utilization = []
     gpu_memory = []
 
-    current_date = datetime.now().strftime("%Y-%m-%d_%H-%M")
 
     params_path = os.path.join('/home/saptarishi.dhanuka_asp25/weather/graphcast_dir/graphcast/local_files/params', f'params_finetune_test{current_date}.npz')
 
@@ -171,12 +180,12 @@ def train_graphcast(data, params, task_config_dict, epochs=10):
     epoch_batch_loss = []
 
     for epoch in range(epochs):
-        print(f'Epoch number {epoch}')
+        logger.info(f"Epoch number {epoch}")
 
         util = pynvml.nvmlDeviceGetUtilizationRates(handle)
         mem = pynvml.nvmlDeviceGetMemoryInfo(handle)
         
-        gpu_utilization.append(util.gpu)           # in percent
+        gpu_utilization.append(util.gpu)           # in percent era5_temp_ppt2022_wb_1.0_regrid_all_vars.zarr
         gpu_memory.append(mem.used / 1024**2)      # in MB
 
         print(gpu_utilization)
@@ -185,7 +194,7 @@ def train_graphcast(data, params, task_config_dict, epochs=10):
         time.sleep(1)
 
         for i in range(data.dims.mapping['time']-3):
-            print(f'Time Batch number: {i}')
+            logger.info(f"Time Batch number: {i}")
             
             # batches
             train_inputs, train_targets, train_forcings = create_input_data(data, task_config_dict=task_config_dict, index=i, lookahead = lookahead + 1)
@@ -204,13 +213,14 @@ def train_graphcast(data, params, task_config_dict, epochs=10):
             print("Train Forcings:", train_forcings_mean_1_day.sizes.mapping)
 
             params, loss = finetuning(train_inputs_mean_1_day,train_targets_mean_1_day,train_forcings_mean_1_day, params)
+            logger.info(f'\n =========== Loss for time batch number: {i} = {loss} =========== \n')
             print(f'\n =========== Loss for time batch number: {i} = {loss} =========== \n')
             loss_tracker.append(loss)
             epoch_batch_loss.append((epoch, i, loss)) 
             if i % 5 == 0 and i > 0:
                 save_params_utils.save_model_params(params, f'{params_path}_{i}')
 
-        print(f'\n =========== Saving model after epoch {epoch} =========== \n')
+        logger.info(f'\n =========== Saving model after epoch {epoch} =========== \n')
         save_params_utils.save_model_params(params, params_path)
 
     pynvml.nvmlShutdown()
@@ -268,6 +278,13 @@ def main():
     global params
     global state
 
+    log_file = f"printing_logs2.log"
+    logging.basicConfig(filename=log_file, level=logging.INFO, format="%(asctime)s - %(message)s")
+    logger = logging.getLogger()
+    logger.info("Starting the script")
+    
+
+
     args = parser.parse_args()
     if args.model_levels == 37:
       filename = '/Datastorage/saptarishi.dhanuka_asp25/gc_weights/graphcast_0.25_37.npz'
@@ -276,18 +293,111 @@ def main():
       filename = '/Datastorage/saptarishi.dhanuka_asp25/gc_weights/graphcast_0.25_13.npz'
       
       with open(f'/Datastorage/saptarishi.dhanuka_asp25/era5_data/graphcast_dataset_source-era5_date-2022-01-01_res-{args.model_resolution}_levels-13_steps-12.nc', 'rb') as f:
-        print("Loading Dataset")
+        logger.info("Loading Dataset")
         tik = datetime.now()
-        training_trial_batch = xarray.load_dataset(f).compute()
+        training_trial_batch = xr.load_dataset(f).compute()
         tok = datetime.now()
-        print(f"Dataset loaded in {tok - tik}")
+        logger.info(f"Dataset loaded in {tok - tik}")
 
     else:
         filename = '/Datastorage/saptarishi.dhanuka_asp25/gc_weights/graphcast_1_13.npz'
-        with open('/Datastorage/saptarishi.dhanuka_asp25/era5_data/graphcast_dataset_source-era5_date-2022-01-01_res-1.0_levels-13_steps-12.nc', 'rb') as f:
+        dataset_name = "/Datastorage/saptarishi.dhanuka_asp25/era5_data/arco_era5_1.0_formatted.nc"
+
+        # arco = xr.open_zarr("/Datastorage/divij.khaitan_asp25/arco_era5.zarr")
+        # old_lats = arco['latitude'].values
+        # old_lons = arco['longitude'].values
+        # new_lats = np.arange(-90.0, 90.0 + 1e-8, 1.0)
+        # new_lats = np.flip(new_lats)
+        # new_lons = np.arange(0, 359.75 + 1e-8, 1.0)
+        # arco = arco.interp({'latitude': new_lats, 'longitude': new_lons}, 
+        #                         method='linear',
+        #                         kwargs={'fill_value': None})
+        
+        # input_vars = ['10m_u_component_of_wind',
+        #             'geopotential_at_surface',
+        #             '10m_v_component_of_wind',
+        #             'specific_humidity',
+        #             'land_sea_mask',
+        #             'vertical_velocity',
+        #             'geopotential',
+        #             'v_component_of_wind',
+        #             'temperature',
+        #             'total_precipitation_6hr',
+        #             'mean_sea_level_pressure',
+        #             '2m_temperature',
+        #             'u_component_of_wind']
+        
+        # arco = arco.drop_vars(['toa_incident_solar_radiation',
+        # 'year_progress_sin',
+        # 'year_progress_cos',
+        # 'day_progress_sin',
+        # 'day_progress_cos','cos_latitude',
+        # 'cos_longitude','sin_longitude'])
+
+        # arco = arco.rename({'total_precipitation': 'total_precipitation_6hr'})
+
+        # arco = arco.expand_dims(batch=1)
+        # arco = arco.rename({'latitude': 'lat', 'longitude': 'lon'})
+
+        # datetime_array = arco['time'].values
+        # # Calculate the time coordinate in 6-hour increments (in nanoseconarco)
+        # time_array = np.arange(0, len(datetime_array) * 21600000000000, 21600000000000, dtype='timedelta64[ns]')
+
+        # # Add the new 'time' coordinate to the dataset
+        # arco1 = arco.assign_coords(datetime=('time', time_array))
+
+        # temp_time = arco1.coords["time"].copy()
+        # temp_datetime = arco1.coords["datetime"].copy()
+
+        # # Reassign the coordinates, swapping their values
+        # arco1 = arco1.assign_coords(
+        #     time=temp_datetime,
+        #     datetime=temp_time
+        # )
+
+        # logger.info("Coordinates first time")
+        # logger.info(arco1)
+        # logger.info("\n")
+        # logger.info(arco1.coords)
+
+
+        # arco1['geopotential_at_surface'] = arco1['geopotential_at_surface'].isel(batch=0, time=0)
+        # arco1['land_sea_mask'] = arco1['land_sea_mask'].isel(batch=0, time=0)
+
+        # old_datetime = arco1["datetime"].values  # shape (1489,)
+
+        # # For our purposes, we want the coordinate to have shape (batch, time). Since the batch
+        # # dimension is of length 1, we can simply add a new axis.
+        # new_datetime = old_datetime[np.newaxis, :]  # shape becomes (1, 1489)
+
+        # # Now, reassign the "datetime" coordinate to have dims ("batch", "time").
+        # arco1 = arco1.assign_coords(datetime=(("batch", "time"), new_datetime))
+
+        # print(f"Coordinates after reassigning: {arco1.coords}")
+
+        # logger.info(arco1.nbytes)
+
+        # select_time = arco1.isel(time=slice(0, 12))
+        # tik = datetime.now()
+
+        # training_trial_batch = select_time.load()
+
+        # tok = datetime.now()
+        # # training_trial_batch = training_trial_batch.rename({'time': 'datetime'})
+        # logger.info("Training batch time")
+        # logger.info(training_trial_batch.coords)
+        # logger.info(f"Dataset loaded in {tok - tik}")
+
+
+
+        with open("/Datastorage/saptarishi.dhanuka_asp25/era5_data/dataset_source-era5_date-2022-01-01_res-1.0_levels-13_steps-40.nc", 'rb') as f:
             print("Loading Dataset")
             tik = datetime.now()
-            training_trial_batch = xarray.load_dataset(f).compute()
+            training_trial_batch = xr.load_dataset(f).compute()
+            # training_trial_batch = training_trial_batch.isel(time=slice(0, 12))
+            # training_trial_batch = training_trial_batch.rename({'time': 'datetime'})
+            print("Training batch time")
+            print(training_trial_batch.datetime)
             tok = datetime.now()
             print(f"Dataset loaded in {tok - tik}")
     
@@ -299,18 +409,18 @@ def main():
 
 
     with open('/Datastorage/saptarishi.dhanuka_asp25/gc_norms/diffs_stddev_by_level.nc', 'rb') as f:
-        diffs_stddev_by_level = xarray.load_dataset(f).compute()
+        diffs_stddev_by_level = xr.load_dataset(f).compute()
     with open('/Datastorage/saptarishi.dhanuka_asp25/gc_norms/stddev_by_level.nc', 'rb') as f:
-        stddev_by_level = xarray.load_dataset(f).compute()
+        stddev_by_level = xr.load_dataset(f).compute()
     with open('/Datastorage/saptarishi.dhanuka_asp25/gc_norms/mean_by_level.nc', 'rb') as f:
-        mean_by_level = xarray.load_dataset(f).compute()
+        mean_by_level = xr.load_dataset(f).compute()
 
 
     state = {}
     model_config = ckpt.model_config
     task_config = ckpt.task_config
-    print(model_config)
-    print(task_config)
+    logger.info(model_config)
+    logger.info(task_config)
     setup_jax_functions.configs['model_config'] = model_config
     setup_jax_functions.configs['task_config'] = task_config
     setup_jax_functions.configs['state'] = state
@@ -353,18 +463,21 @@ def main():
 
     assert training_trial_batch.sizes["time"] >= 3
 
-    print(f"Training batch time dimensions: {training_trial_batch.sizes['time']}")
+    logger.info(f"Training batch time dimensions: {training_trial_batch.sizes['time']}")
 
     task_config_dict =  dataclasses.asdict(task_config)
     # task_config_dict.pop('input_duration')
 
-    print("Starting training")
+    logger.info("Starting training")
 
     train_graphcast(training_trial_batch, params, task_config_dict, epochs=10)
 
-    print("Finished training")
+    logger.info("Finished training")
+
+    # can add evaluation and comparison code here after testing everything for a few timesteps
 
 if __name__=="__main__":
   main()
 
 
+# </finetuning_cleaned.py>
