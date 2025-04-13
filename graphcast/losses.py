@@ -19,7 +19,6 @@ from graphcast import xarray_tree
 import numpy as np
 from typing_extensions import Protocol
 import xarray
-import jax
 
 
 LossAndDiagnostics = tuple[xarray.DataArray, xarray.Dataset]
@@ -60,34 +59,14 @@ def weighted_mse_per_level(
     per_variable_weights: Mapping[str, float],
 ) -> LossAndDiagnostics:
   """Latitude- and pressure-level-weighted MSE loss."""
-  # jax.debug.print("In losses.py weighted MSE per level")
-  
-  # lat_min, lat_max = 8.0, 37.0
-  # lon_min, lon_max = 68.0, 97.0
-
-  precipitation_var = 'total_precipitation_6hr'
-
-  predictions_ppt = predictions[precipitation_var]
-  targets_ppt = targets[precipitation_var]
-
   def loss(prediction, target):
     loss = (prediction - target)**2
     loss *= normalized_latitude_weights(target).astype(loss.dtype)
-
-    # print(f"Target Dims in loss fn(): {target.dims}")
-
     if 'level' in target.dims:
       loss *= normalized_level_weights(target).astype(loss.dtype)
     return _mean_preserving_batch(loss)
 
   losses = xarray_tree.map_structure(loss, predictions, targets)
-
-  # print(f'New losses dir :\n {dir(losses)}')
-  # print(f'Per Variable Weights:\n {per_variable_weights}')
-
-  sum_per_var = sum_per_variable_losses(losses, per_variable_weights)
-  # print("\n\n In losses.py loss fn(): \n\n")
-  # print(sum_per_var)
   return sum_per_variable_losses(losses, per_variable_weights)
 
 
@@ -100,29 +79,18 @@ def sum_per_variable_losses(
     weights: Mapping[str, float],
 ) -> LossAndDiagnostics:
   """Weighted sum of per-variable losses."""
-  # print(f"Weights Keys: {weights.keys()}")
-  # print(f"Per Var Losses Keys: {per_variable_losses.keys()}")
   if not set(weights.keys()).issubset(set(per_variable_losses.keys())):
     raise ValueError(
         'Passing a weight that does not correspond to any variable '
         f'{set(weights.keys())-set(per_variable_losses.keys())}')
 
   weighted_per_variable_losses = {
-      name: loss * weights.get(name, 1.0)
+      name: loss * weights.get(name, 1)
       for name, loss in per_variable_losses.items()
   }
-
-  # for name, loss in per_variable_losses.items():
-    # print(f"Name in sumpervar: {name}")
-    # print(f"Loss in sumpervar: {loss}")
-
-
-
   total = xarray.concat(
       weighted_per_variable_losses.values(), dim='variable', join='exact').sum(
           'variable', skipna=False)
-  # print(f"\n\n Total in sum_per_var = {total}")
-  # print(f"\n per_var_losses = {per_variable_losses}")
   return total, per_variable_losses  # pytype: disable=bad-return-type
 
 
@@ -209,77 +177,3 @@ def _check_uniform_spacing_and_get_delta(vector):
   if not np.all(np.isclose(diff[0], diff)):
     raise ValueError(f'Vector {diff} is not uniformly spaced.')
   return diff[0]
-
-
-def weighted_mse_var(
-    predictions: xarray.Dataset,
-    targets: xarray.Dataset,
-    var: str
-) -> LossAndDiagnostics:
-    """
-    Compute the mean squared error only over the precipitation variable.
-    Assumes that the variable name is 'total_precipitation_6hr'.
-    """
-    # Extract only the precipitation variable from predictions and targets.
-    try:
-        pred_precip = predictions[var]
-        target_precip = targets[var]
-    except KeyError as e:
-        raise KeyError(f"The variable {var} was not found "
-                       "in the predictions or targets.") from e
-
-    # Compute squared error.
-    error = (pred_precip - target_precip) ** 2
-
-    # Average over all dimensions except for 'batch' (if present).
-    dims_to_average = [dim for dim in error.dims if dim != "batch"]
-    loss = error.mean(dim=dims_to_average, skipna=False)
-
-    # Create a diagnostics dataset (here we simply report the precipitation MSE).
-    diagnostics = xarray.Dataset({f"{var}_mse": loss})
-    return loss, diagnostics
-
-
-def weighted_mse_precipitation_india(
-    predictions: xarray.Dataset,
-    targets: xarray.Dataset,
-) -> LossAndDiagnostics:
-    """
-    Compute the mean squared error for precipitation ('total_precipitation_6hr')
-    only over the Indian region, defined approximately by:
-      lat between 8 and 37 degrees, and
-      lon between 68 and 97 degrees.
-    
-    Returns:
-      A tuple (loss, diagnostics), where loss is averaged over all dimensions except 'batch'.
-    """
-
-    latmin = 8
-    latmax = 37
-    lonmin = 68
-    lonmax = 97
-
-
-    # Extract the precipitation variable from predictions and targets.
-    try:
-        pred_precip = predictions["total_precipitation_6hr"]
-        target_precip = targets["total_precipitation_6hr"]
-    except KeyError as e:
-        raise KeyError("Precipitation variable 'total_precipitation_6hr' not found in predictions or targets.") from e
-
-    # Select only the Indian region (assumes that the 'lat' and 'lon' coordinates exist)
-    pred_india = pred_precip.sel(lat=slice(8, 37), lon=slice(68, 97))
-    target_india = target_precip.sel(lat=slice(8, 37), lon=slice(68, 97))
-
-    print(f"Selected lat and lon: {pred_india.lat}, {pred_india.lon}")
-
-    # Compute squared error
-    error = (pred_india - target_india) ** 2
-
-    # Average the error over all dimensions except the 'batch' dimension
-    dims_to_average = [dim for dim in error.dims if dim != "batch"]
-    loss = error.mean(dim=dims_to_average, skipna=False)
-
-    # Create a diagnostics dataset containing the India-specific MSE
-    diagnostics = xarray.Dataset({"precipitation_india_mse": loss})
-    return loss, diagnostics

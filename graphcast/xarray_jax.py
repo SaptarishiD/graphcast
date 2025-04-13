@@ -341,10 +341,8 @@ def wrap(value):
 def unwrap(value, require_jax=False):
   """Unwraps wrapped JAX arrays used in xarray, passing through other values."""
   if isinstance(value, JaxArrayWrapper):
-    # print(f"\nValue inside unwrap function when is instance ofjaxarraywrapper: \n {value}")
     return value.jax_array
   elif isinstance(value, jax.Array):
-    # print(f"\nValue inside unwrap function when is instance jax.Array: \n {value}")
     return value
   elif require_jax:
     raise TypeError(f'Expected JAX array, found {type(value)}.')
