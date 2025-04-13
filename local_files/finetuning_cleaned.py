@@ -14,6 +14,7 @@ import xarray as xr
 import numpy as np
 import pandas as pd
 from datetime import datetime
+from tqdm import tqdm
 
 import jax
 import optax
@@ -26,6 +27,9 @@ from metrics import compute_rmse, compute_mae, compute_bias, compute_acc
 import matplotlib.pyplot as plt
 import pynvml
 import time
+
+current_date = datetime.now().strftime("%Y-%m-%d_%H-%M")
+
 
 
 
@@ -158,7 +162,6 @@ def combinedata(first,second):
 def train_graphcast(data, params, task_config_dict, epochs=10):
 
     device = jax.devices()[0]
-    current_date = datetime.now().strftime("%Y-%m-%d_%H-%M")
 
     log_file = f"training_logs_{current_date}.log"
     logging.basicConfig(filename=log_file, level=logging.INFO, format="%(asctime)s - %(message)s")
@@ -179,7 +182,7 @@ def train_graphcast(data, params, task_config_dict, epochs=10):
 
     epoch_batch_loss = []
 
-    for epoch in range(epochs):
+    for epoch in tqdm(range(epochs), desc="Training Epochs"):
         logger.info(f"Epoch number {epoch}")
 
         util = pynvml.nvmlDeviceGetUtilizationRates(handle)
@@ -193,7 +196,7 @@ def train_graphcast(data, params, task_config_dict, epochs=10):
         
         time.sleep(1)
 
-        for i in range(data.dims.mapping['time']-3):
+        for i in tqdm(range(data.dims.mapping['time']-3), desc="Training Batches"):
             logger.info(f"Time Batch number: {i}")
             
             # batches
@@ -217,7 +220,7 @@ def train_graphcast(data, params, task_config_dict, epochs=10):
             print(f'\n =========== Loss for time batch number: {i} = {loss} =========== \n')
             loss_tracker.append(loss)
             epoch_batch_loss.append((epoch, i, loss)) 
-            if i % 5 == 0 and i > 0:
+            if i % 20 == 0 and i > 0:
                 save_params_utils.save_model_params(params, f'{params_path}_{i}')
 
         logger.info(f'\n =========== Saving model after epoch {epoch} =========== \n')
@@ -278,7 +281,7 @@ def main():
     global params
     global state
 
-    log_file = f"printing_logs2.log"
+    log_file = f"printing_logs{current_date}.log"
     logging.basicConfig(filename=log_file, level=logging.INFO, format="%(asctime)s - %(message)s")
     logger = logging.getLogger()
     logger.info("Starting the script")
@@ -303,103 +306,105 @@ def main():
         filename = '/Datastorage/saptarishi.dhanuka_asp25/gc_weights/graphcast_1_13.npz'
         dataset_name = "/Datastorage/saptarishi.dhanuka_asp25/era5_data/arco_era5_1.0_formatted.nc"
 
-        # arco = xr.open_zarr("/Datastorage/divij.khaitan_asp25/arco_era5.zarr")
-        # old_lats = arco['latitude'].values
-        # old_lons = arco['longitude'].values
-        # new_lats = np.arange(-90.0, 90.0 + 1e-8, 1.0)
-        # new_lats = np.flip(new_lats)
-        # new_lons = np.arange(0, 359.75 + 1e-8, 1.0)
-        # arco = arco.interp({'latitude': new_lats, 'longitude': new_lons}, 
-        #                         method='linear',
-        #                         kwargs={'fill_value': None})
+        arco = xr.open_zarr("/Datastorage/divij.khaitan_asp25/arco_era5.zarr")
+        old_lats = arco['latitude'].values
+        old_lons = arco['longitude'].values
+        new_lats = np.arange(-90.0, 90.0 + 1e-8, 1.0)
+        new_lats = np.flip(new_lats)
+        new_lons = np.arange(0, 359.75 + 1e-8, 1.0)
+        arco = arco.interp({'latitude': new_lats, 'longitude': new_lons}, 
+                                method='linear',
+                                kwargs={'fill_value': None})
         
-        # input_vars = ['10m_u_component_of_wind',
-        #             'geopotential_at_surface',
-        #             '10m_v_component_of_wind',
-        #             'specific_humidity',
-        #             'land_sea_mask',
-        #             'vertical_velocity',
-        #             'geopotential',
-        #             'v_component_of_wind',
-        #             'temperature',
-        #             'total_precipitation_6hr',
-        #             'mean_sea_level_pressure',
-        #             '2m_temperature',
-        #             'u_component_of_wind']
+        input_vars = ['10m_u_component_of_wind',
+                    'geopotential_at_surface',
+                    '10m_v_component_of_wind',
+                    'specific_humidity',
+                    'land_sea_mask',
+                    'vertical_velocity',
+                    'geopotential',
+                    'v_component_of_wind',
+                    'temperature',
+                    'total_precipitation_6hr',
+                    'mean_sea_level_pressure',
+                    '2m_temperature',
+                    'u_component_of_wind']
         
-        # arco = arco.drop_vars(['toa_incident_solar_radiation',
-        # 'year_progress_sin',
-        # 'year_progress_cos',
-        # 'day_progress_sin',
-        # 'day_progress_cos','cos_latitude',
-        # 'cos_longitude','sin_longitude'])
+        arco = arco.drop_vars(['toa_incident_solar_radiation',
+        'year_progress_sin',
+        'year_progress_cos',
+        'day_progress_sin',
+        'day_progress_cos','cos_latitude',
+        'cos_longitude','sin_longitude'])
 
-        # arco = arco.rename({'total_precipitation': 'total_precipitation_6hr'})
+        arco = arco.rename({'total_precipitation': 'total_precipitation_6hr'})
 
-        # arco = arco.expand_dims(batch=1)
-        # arco = arco.rename({'latitude': 'lat', 'longitude': 'lon'})
+        arco = arco.expand_dims(batch=1)
+        arco = arco.rename({'latitude': 'lat', 'longitude': 'lon'})
 
-        # datetime_array = arco['time'].values
-        # # Calculate the time coordinate in 6-hour increments (in nanoseconarco)
-        # time_array = np.arange(0, len(datetime_array) * 21600000000000, 21600000000000, dtype='timedelta64[ns]')
+        datetime_array = arco['time'].values
+        # Calculate the time coordinate in 6-hour increments (in nanoseconarco)
+        time_array = np.arange(0, len(datetime_array) * 21600000000000, 21600000000000, dtype='timedelta64[ns]')
 
-        # # Add the new 'time' coordinate to the dataset
-        # arco1 = arco.assign_coords(datetime=('time', time_array))
+        # Add the new 'time' coordinate to the dataset
+        arco1 = arco.assign_coords(datetime=('time', time_array))
 
-        # temp_time = arco1.coords["time"].copy()
-        # temp_datetime = arco1.coords["datetime"].copy()
+        temp_time = arco1.coords["time"].copy()
+        temp_datetime = arco1.coords["datetime"].copy()
 
-        # # Reassign the coordinates, swapping their values
-        # arco1 = arco1.assign_coords(
-        #     time=temp_datetime,
-        #     datetime=temp_time
-        # )
+        # Reassign the coordinates, swapping their values
+        arco1 = arco1.assign_coords(
+            time=temp_datetime,
+            datetime=temp_time
+        )
 
-        # logger.info("Coordinates first time")
-        # logger.info(arco1)
-        # logger.info("\n")
-        # logger.info(arco1.coords)
-
-
-        # arco1['geopotential_at_surface'] = arco1['geopotential_at_surface'].isel(batch=0, time=0)
-        # arco1['land_sea_mask'] = arco1['land_sea_mask'].isel(batch=0, time=0)
-
-        # old_datetime = arco1["datetime"].values  # shape (1489,)
-
-        # # For our purposes, we want the coordinate to have shape (batch, time). Since the batch
-        # # dimension is of length 1, we can simply add a new axis.
-        # new_datetime = old_datetime[np.newaxis, :]  # shape becomes (1, 1489)
-
-        # # Now, reassign the "datetime" coordinate to have dims ("batch", "time").
-        # arco1 = arco1.assign_coords(datetime=(("batch", "time"), new_datetime))
-
-        # print(f"Coordinates after reassigning: {arco1.coords}")
-
-        # logger.info(arco1.nbytes)
-
-        # select_time = arco1.isel(time=slice(0, 12))
-        # tik = datetime.now()
-
-        # training_trial_batch = select_time.load()
-
-        # tok = datetime.now()
-        # # training_trial_batch = training_trial_batch.rename({'time': 'datetime'})
-        # logger.info("Training batch time")
-        # logger.info(training_trial_batch.coords)
-        # logger.info(f"Dataset loaded in {tok - tik}")
+        logger.info("Coordinates first time")
+        logger.info(arco1)
+        logger.info("\n")
+        logger.info(arco1.coords)
+        logger.info("\n")
 
 
+        arco1['geopotential_at_surface'] = arco1['geopotential_at_surface'].isel(batch=0, time=0)
+        arco1['land_sea_mask'] = arco1['land_sea_mask'].isel(batch=0, time=0)
 
-        with open("/Datastorage/saptarishi.dhanuka_asp25/era5_data/dataset_source-era5_date-2022-01-01_res-1.0_levels-13_steps-40.nc", 'rb') as f:
-            print("Loading Dataset")
-            tik = datetime.now()
-            training_trial_batch = xr.load_dataset(f).compute()
-            # training_trial_batch = training_trial_batch.isel(time=slice(0, 12))
-            # training_trial_batch = training_trial_batch.rename({'time': 'datetime'})
-            print("Training batch time")
-            print(training_trial_batch.datetime)
-            tok = datetime.now()
-            print(f"Dataset loaded in {tok - tik}")
+        old_datetime = arco1["datetime"].values  # shape (1489,)
+
+        # For our purposes, we want the coordinate to have shape (batch, time). Since the batch
+        # dimension is of length 1, we can simply add a new axis.
+        new_datetime = old_datetime[np.newaxis, :]  # shape becomes (1, 1489)
+
+        # Now, reassign the "datetime" coordinate to have dims ("batch", "time").
+        arco1 = arco1.assign_coords(datetime=(("batch", "time"), new_datetime))
+
+        print(f"Coordinates after reassigning: {arco1.coords}\n")
+
+
+        logger.info(arco1.nbytes)
+
+        select_time = arco1.isel(time=slice(0, 120))
+        tik = datetime.now()
+
+        training_trial_batch = select_time.load()
+
+        tok = datetime.now()
+        # training_trial_batch = training_trial_batch.rename({'time': 'datetime'})
+        logger.info("Training batch time")
+        logger.info(training_trial_batch.coords)
+        logger.info(f"Dataset loaded in {tok - tik}")
+
+
+
+        # with open("/Datastorage/saptarishi.dhanuka_asp25/era5_data/dataset_source-era5_date-2022-01-01_res-1.0_levels-13_steps-40.nc", 'rb') as f:
+        #     print("Loading Dataset")
+        #     tik = datetime.now()
+        #     training_trial_batch = xr.load_dataset(f).compute()
+        #     # training_trial_batch = training_trial_batch.isel(time=slice(0, 12))
+        #     # training_trial_batch = training_trial_batch.rename({'time': 'datetime'})
+        #     print("Training batch time")
+        #     print(training_trial_batch.datetime)
+        #     tok = datetime.now()
+        #     print(f"Dataset loaded in {tok - tik}")
     
     
     with open(filename, 'rb') as f:
@@ -455,9 +460,7 @@ def main():
             state=state
         )
         return predictions
-    
-
-      
+  
 
     # training_trial_batch = generate_sample_era5_dataset(model_config=model_config, task_config=task_config, time_steps = 10)
 
@@ -470,7 +473,7 @@ def main():
 
     logger.info("Starting training")
 
-    train_graphcast(training_trial_batch, params, task_config_dict, epochs=10)
+    train_graphcast(training_trial_batch, params, task_config_dict, epochs=5)
 
     logger.info("Finished training")
 
