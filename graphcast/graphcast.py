@@ -413,6 +413,9 @@ class GraphCast(predictor_base.Predictor):
             "mean_sea_level_pressure": 0.1,
             "total_precipitation_6hr": 0.1,
         })
+    
+
+    # print("\n ========== Loss in graphcast.py loss_and_predictions():\n {} \n ==========".format(loss))
     return loss, predictions  # pytype: disable=bad-return-type  # jax-ndarray
 
   def loss(  # pytype: disable=signature-mismatch  # jax-ndarray

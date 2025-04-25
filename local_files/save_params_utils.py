@@ -21,4 +21,24 @@ def save_model_params(d, file_path):
     os.makedirs(os.path.dirname(file_path), exist_ok=True)
     np.savez(file_path, **np_dict)
 
+
+
+def unflatten_dict(d, sep='//'):
+    result_dict = {}
+    for flat_key, value in d.items():
+        keys = flat_key.split(sep)
+        d = result_dict
+        for key in keys[:-1]:
+            if key not in d:
+                d[key] = {}
+            d = d[key]
+        d[keys[-1]] = value
+    return result_dict
+
+def load_model_params(file_path):
+    with np.load(file_path, allow_pickle=True) as npz_file:
+        # Convert NumPy arrays back to JAX arrays
+        jax_dict = {k: jnp.array(v) for k, v in npz_file.items()}
+    return unflatten_dict(jax_dict)
+
 #</save_params_utils.py>

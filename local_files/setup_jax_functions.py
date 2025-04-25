@@ -71,7 +71,7 @@ def loss_fn(model_config, task_config, inputs, targets, forcings):
 
 
 
-  # print("\n Actual loss values in setup_jax_functions: {}".format(actual_loss_values))
+  print("\n Actual loss values in setup_jax_functions: {}".format(actual_loss_values))
   # print(f"\n ========== Diagnostics in setup_jax_functions.py loss_fn():\n {loss}\n ==========")
 
   # print("\n Loss array.data.jax_array: {}\n".format(loss.data.jax_array))

@@ -1,0 +1,543 @@
+Training batch time dimensions: 8
+Starting training
+Training Epochs:   0%|          | 0/1 [00:00<?, ?it/s]
+[74]
+[42859.625]
+Train Inputs:   {'batch': 1, 'time': 2, 'lat': 181, 'lon': 360, 'level': 13}
+Train Targets:  {'batch': 1, 'time': 2, 'lat': 181, 'lon': 360, 'level': 13}
+Train Forcings: {'batch': 1, 'time': 2, 'lat': 181, 'lon': 360}
+Setting up grads function
+/home/saptarishi.dhanuka_asp25/weather/graphcast_dir/graphcast/graphcast/autoregressive.py:290: FutureWarning: The return type of `Dataset.dims` will be changed to return a set of dimension names in future, in order to be more consistent with `DataArray.dims`. To access a mapping from dimension names to lengths, please use `Dataset.sizes`.
+  scan_length = targets.dims['time']
+<class 'xarray.core.dataarray.DataArray'>
+<class 'xarray.core.dataarray.DataArray'>
+<class 'xarray.core.dataarray.DataArray'>
+<class 'xarray.core.dataarray.DataArray'>
+<class 'xarray.core.dataarray.DataArray'>
+<class 'xarray.core.dataarray.DataArray'>
+<class 'xarray.core.dataarray.DataArray'>
+<class 'xarray.core.dataarray.DataArray'>
+<class 'xarray.core.dataarray.DataArray'>
+<class 'xarray.core.dataarray.DataArray'>
+<class 'xarray.core.dataarray.DataArray'>
+Sum per var for losses: (<xarray.DataArray '10m_u_component_of_wind' (batch: 1)> Size: 2B
+xarray_jax.JaxArrayWrapper(Traced<ShapedArray(bfloat16[1])>with<DynamicJaxprTrace>)
+Dimensions without coordinates: batch, <xarray.Dataset> Size: 22B
+Dimensions:                  (batch: 1)
+Dimensions without coordinates: batch
+Data variables:
+    10m_u_component_of_wind  (batch) bfloat16 2B xarray_jax.JaxArrayWrapper(T...
+    10m_v_component_of_wind  (batch) bfloat16 2B xarray_jax.JaxArrayWrapper(T...
+    2m_temperature           (batch) bfloat16 2B xarray_jax.JaxArrayWrapper(T...
+    geopotential             (batch) bfloat16 2B xarray_jax.JaxArrayWrapper(T...
+    mean_sea_level_pressure  (batch) bfloat16 2B xarray_jax.JaxArrayWrapper(T...
+    specific_humidity        (batch) bfloat16 2B xarray_jax.JaxArrayWrapper(T...
+    temperature              (batch) bfloat16 2B xarray_jax.JaxArrayWrapper(T...
+    total_precipitation_6hr  (batch) bfloat16 2B xarray_jax.JaxArrayWrapper(T...
+...
+    u_component_of_wind      (batch) bfloat16 2B xarray_jax.JaxArrayWrapper(T...
+    v_component_of_wind      (batch) bfloat16 2B xarray_jax.JaxArrayWrapper(T...
+    vertical_velocity        (batch) bfloat16 2B xarray_jax.JaxArrayWrapper(T...) 
+ ==========
+Output is truncated. View as a scrollable element or open in a text editor. Adjust cell output settings...
+/home/saptarishi.dhanuka_asp25/weather/graphcast_dir/graphcast/graphcast/autoregressive.py:115: FutureWarning: The return type of `Dataset.dims` will be changed to return a set of dimension names in future, in order to be more consistent with `DataArray.dims`. To access a mapping from dimension names to lengths, please use `Dataset.sizes`.
+  num_inputs = inputs.dims['time']
+<class 'xarray.core.dataarray.DataArray'>
+<class 'xarray.core.dataarray.DataArray'>
+<class 'xarray.core.dataarray.DataArray'>
+<class 'xarray.core.dataarray.DataArray'>
+<class 'xarray.core.dataarray.DataArray'>
+<class 'xarray.core.dataarray.DataArray'>
+<class 'xarray.core.dataarray.DataArray'>
+<class 'xarray.core.dataarray.DataArray'>
+<class 'xarray.core.dataarray.DataArray'>
+<class 'xarray.core.dataarray.DataArray'>
+<class 'xarray.core.dataarray.DataArray'>
+Sum per var for losses: (<xarray.DataArray '10m_u_component_of_wind' (batch: 1)> Size: 2B
+xarray_jax.JaxArrayWrapper(Traced<ShapedArray(bfloat16[1])>with<DynamicJaxprTrace>)
+Dimensions without coordinates: batch, <xarray.Dataset> Size: 22B
+Dimensions:                  (batch: 1)
+Dimensions without coordinates: batch
+Data variables:
+    10m_u_component_of_wind  (batch) bfloat16 2B xarray_jax.JaxArrayWrapper(T...
+    10m_v_component_of_wind  (batch) bfloat16 2B xarray_jax.JaxArrayWrapper(T...
+    2m_temperature           (batch) bfloat16 2B xarray_jax.JaxArrayWrapper(T...
+    geopotential             (batch) bfloat16 2B xarray_jax.JaxArrayWrapper(T...
+    mean_sea_level_pressure  (batch) bfloat16 2B xarray_jax.JaxArrayWrapper(T...
+    specific_humidity        (batch) bfloat16 2B xarray_jax.JaxArrayWrapper(T...
+    temperature              (batch) bfloat16 2B xarray_jax.JaxArrayWrapper(T...
+    total_precipitation_6hr  (batch) bfloat16 2B xarray_jax.JaxArrayWrapper(T...
+...
+    u_component_of_wind      (batch) bfloat16 2B xarray_jax.JaxArrayWrapper(T...
+    v_component_of_wind      (batch) bfloat16 2B xarray_jax.JaxArrayWrapper(T...
+    vertical_velocity        (batch) bfloat16 2B xarray_jax.JaxArrayWrapper(T...) 
+ ==========
+Output is truncated. View as a scrollable element or open in a text editor. Adjust cell output settings...
+/home/saptarishi.dhanuka_asp25/weather/graphcast_dir/graphcast/graphcast/autoregressive.py:115: FutureWarning: The return type of `Dataset.dims` will be changed to return a set of dimension names in future, in order to be more consistent with `DataArray.dims`. To access a mapping from dimension names to lengths, please use `Dataset.sizes`.
+  num_inputs = inputs.dims['time']
+Here we are printing the loss and diagnostics in autoregressive.py
+<class 'xarray.core.dataarray.DataArray'>
+<xarray.DataArray (batch: 1)> Size: 4B
+xarray_jax.JaxArrayWrapper(Traced<ShapedArray(float32[1])>with<JVPTrace> with
+  primal = Array([1.1386719], dtype=float32)
+  tangent = Traced<ShapedArray(float32[1])>with<JaxprTrace> with
+    pval = (ShapedArray(float32[1]), None)
+    recipe = JaxprEqnRecipe(eqn_id=<object object at 0x7f7cec688080>, in_tracers=(Traced<ShapedArray(float32[1]):JaxprTrace>,), out_tracer_refs=[<weakref at 0x7f7cf0d35350; to 'JaxprTracer' at 0x7f7cf0d35da0>], out_avals=[ShapedArray(float32[1])], primitive=convert_element_type, params={'new_dtype': dtype('float32'), 'weak_type': False, 'sharding': None}, effects=frozenset(), source_info=<jax._src.source_info_util.SourceInfo object at 0x7f7cec172e90>, ctx=JaxprEqnContext(compute_type=None, threefry_partitionable=True, cur_abstract_mesh=(), xla_metadata={})))
+Dimensions without coordinates: batch
+Here we are printing the unwrapped loss and diagnostics in autoregressive.py
+(Traced<ShapedArray(float32[])>with<JVPTrace> with
+  primal = Array(1.1386719, dtype=float32)
+  tangent = Traced<ShapedArray(float32[])>with<JaxprTrace> with
+    pval = (ShapedArray(float32[]), None)
+    recipe = JaxprEqnRecipe(eqn_id=<object object at 0x7f7cec6891d0>, in_tracers=(Traced<ShapedArray(float32[]):JaxprTrace>, Traced<ShapedArray(float32[]):JaxprTrace>), out_tracer_refs=[<weakref at 0x7f7d074353a0; to 'JaxprTracer' at 0x7f7cef5e34c0>], out_avals=[ShapedArray(float32[])], primitive=div, params={}, effects=frozenset(), source_info=<jax._src.source_info_util.SourceInfo object at 0x7f7cefa8dde0>, ctx=JaxprEqnContext(compute_type=None, threefry_partitionable=True, cur_abstract_mesh=(), xla_metadata={})), {'10m_u_component_of_wind': Traced<ShapedArray(float32[])>with<JVPTrace> with
+  primal = Array(0.09570312, dtype=float32)
+  tangent = Traced<ShapedArray(float32[])>with<JaxprTrace> with
+    pval = (ShapedArray(float32[]), None)
+    recipe = JaxprEqnRecipe(eqn_id=<object object at 0x7f7cec689310>, in_tracers=(Traced<ShapedArray(float32[]):JaxprTrace>, Traced<ShapedArray(float32[]):JaxprTrace>), out_tracer_refs=[<weakref at 0x7f7cf02410d0; to 'JaxprTracer' at 0x7f7cf02428e0>], out_avals=[ShapedArray(float32[])], primitive=div, params={}, effects=frozenset(), source_info=<jax._src.source_info_util.SourceInfo object at 0x7f7cefa8ea70>, ctx=JaxprEqnContext(compute_type=None, threefry_partitionable=True, cur_abstract_mesh=(), xla_metadata={})), '10m_v_component_of_wind': Traced<ShapedArray(float32[])>with<JVPTrace> with
+  primal = Array(0.08227539, dtype=float32)
+  tangent = Traced<ShapedArray(float32[])>with<JaxprTrace> with
+    pval = (ShapedArray(float32[]), None)
+    recipe = JaxprEqnRecipe(eqn_id=<object object at 0x7f7cec689410>, in_tracers=(Traced<ShapedArray(float32[]):JaxprTrace>, Traced<ShapedArray(float32[]):JaxprTrace>), out_tracer_refs=[<weakref at 0x7f7cf09e2930; to 'JaxprTracer' at 0x7f7cf0241580>], out_avals=[ShapedArray(float32[])], primitive=div, params={}, effects=frozenset(), source_info=<jax._src.source_info_util.SourceInfo object at 0x7f7cefa8f700>, ctx=JaxprEqnContext(compute_type=None, threefry_partitionable=True, cur_abstract_mesh=(), xla_metadata={})), '2m_temperature': Traced<ShapedArray(float32[])>with<JVPTrace> with
+  primal = Array(0.05163574, dtype=float32)
+  tangent = Traced<ShapedArray(float32[])>with<JaxprTrace> with
+...
+    recipe = JaxprEqnRecipe(eqn_id=<object object at 0x7f7cec688080>, in_tracers=(Traced<ShapedArray(float32[1]):JaxprTrace>,), out_tracer_refs=[<weakref at 0x7f7cf0d35350; to 'JaxprTracer' at 0x7f7cf0d35da0>], out_avals=[ShapedArray(float32[1])], primitive=convert_element_type, params={'new_dtype': dtype('float32'), 'weak_type': False, 'sharding': None}, effects=frozenset(), source_info=<jax._src.source_info_util.SourceInfo object at 0x7f7cec172e90>, ctx=JaxprEqnContext(compute_type=None, threefry_partitionable=True, cur_abstract_mesh=(), xla_metadata={})))
+Dimensions without coordinates: batch
+Losses calculated, now updating
+Applying updates
+Output is truncated. View as a scrollable element or open in a text editor. Adjust cell output settings...
+
+ =========== Loss for time batch number: 0 = 1.138671875 =========== 
+
+Train Inputs:   {'batch': 1, 'time': 2, 'lat': 181, 'lon': 360, 'level': 13}
+Train Targets:  {'batch': 1, 'time': 2, 'lat': 181, 'lon': 360, 'level': 13}
+Train Forcings: {'batch': 1, 'time': 2, 'lat': 181, 'lon': 360}
+Setting up grads function
+/home/saptarishi.dhanuka_asp25/weather/graphcast_dir/graphcast/graphcast/autoregressive.py:290: FutureWarning: The return type of `Dataset.dims` will be changed to return a set of dimension names in future, in order to be more consistent with `DataArray.dims`. To access a mapping from dimension names to lengths, please use `Dataset.sizes`.
+  scan_length = targets.dims['time']
+<class 'xarray.core.dataarray.DataArray'>
+<class 'xarray.core.dataarray.DataArray'>
+<class 'xarray.core.dataarray.DataArray'>
+<class 'xarray.core.dataarray.DataArray'>
+<class 'xarray.core.dataarray.DataArray'>
+<class 'xarray.core.dataarray.DataArray'>
+<class 'xarray.core.dataarray.DataArray'>
+<class 'xarray.core.dataarray.DataArray'>
+<class 'xarray.core.dataarray.DataArray'>
+<class 'xarray.core.dataarray.DataArray'>
+<class 'xarray.core.dataarray.DataArray'>
+Sum per var for losses: (<xarray.DataArray '10m_u_component_of_wind' (batch: 1)> Size: 2B
+xarray_jax.JaxArrayWrapper(Traced<ShapedArray(bfloat16[1])>with<DynamicJaxprTrace>)
+Dimensions without coordinates: batch, <xarray.Dataset> Size: 22B
+Dimensions:                  (batch: 1)
+Dimensions without coordinates: batch
+Data variables:
+    10m_u_component_of_wind  (batch) bfloat16 2B xarray_jax.JaxArrayWrapper(T...
+    10m_v_component_of_wind  (batch) bfloat16 2B xarray_jax.JaxArrayWrapper(T...
+    2m_temperature           (batch) bfloat16 2B xarray_jax.JaxArrayWrapper(T...
+    geopotential             (batch) bfloat16 2B xarray_jax.JaxArrayWrapper(T...
+    mean_sea_level_pressure  (batch) bfloat16 2B xarray_jax.JaxArrayWrapper(T...
+    specific_humidity        (batch) bfloat16 2B xarray_jax.JaxArrayWrapper(T...
+    temperature              (batch) bfloat16 2B xarray_jax.JaxArrayWrapper(T...
+    total_precipitation_6hr  (batch) bfloat16 2B xarray_jax.JaxArrayWrapper(T...
+...
+    u_component_of_wind      (batch) bfloat16 2B xarray_jax.JaxArrayWrapper(T...
+    v_component_of_wind      (batch) bfloat16 2B xarray_jax.JaxArrayWrapper(T...
+    vertical_velocity        (batch) bfloat16 2B xarray_jax.JaxArrayWrapper(T...) 
+ ==========
+Output is truncated. View as a scrollable element or open in a text editor. Adjust cell output settings...
+/home/saptarishi.dhanuka_asp25/weather/graphcast_dir/graphcast/graphcast/autoregressive.py:115: FutureWarning: The return type of `Dataset.dims` will be changed to return a set of dimension names in future, in order to be more consistent with `DataArray.dims`. To access a mapping from dimension names to lengths, please use `Dataset.sizes`.
+  num_inputs = inputs.dims['time']
+<class 'xarray.core.dataarray.DataArray'>
+<class 'xarray.core.dataarray.DataArray'>
+<class 'xarray.core.dataarray.DataArray'>
+<class 'xarray.core.dataarray.DataArray'>
+<class 'xarray.core.dataarray.DataArray'>
+<class 'xarray.core.dataarray.DataArray'>
+<class 'xarray.core.dataarray.DataArray'>
+<class 'xarray.core.dataarray.DataArray'>
+<class 'xarray.core.dataarray.DataArray'>
+<class 'xarray.core.dataarray.DataArray'>
+<class 'xarray.core.dataarray.DataArray'>
+Sum per var for losses: (<xarray.DataArray '10m_u_component_of_wind' (batch: 1)> Size: 2B
+xarray_jax.JaxArrayWrapper(Traced<ShapedArray(bfloat16[1])>with<DynamicJaxprTrace>)
+Dimensions without coordinates: batch, <xarray.Dataset> Size: 22B
+Dimensions:                  (batch: 1)
+Dimensions without coordinates: batch
+Data variables:
+    10m_u_component_of_wind  (batch) bfloat16 2B xarray_jax.JaxArrayWrapper(T...
+    10m_v_component_of_wind  (batch) bfloat16 2B xarray_jax.JaxArrayWrapper(T...
+    2m_temperature           (batch) bfloat16 2B xarray_jax.JaxArrayWrapper(T...
+    geopotential             (batch) bfloat16 2B xarray_jax.JaxArrayWrapper(T...
+    mean_sea_level_pressure  (batch) bfloat16 2B xarray_jax.JaxArrayWrapper(T...
+    specific_humidity        (batch) bfloat16 2B xarray_jax.JaxArrayWrapper(T...
+    temperature              (batch) bfloat16 2B xarray_jax.JaxArrayWrapper(T...
+    total_precipitation_6hr  (batch) bfloat16 2B xarray_jax.JaxArrayWrapper(T...
+...
+    u_component_of_wind      (batch) bfloat16 2B xarray_jax.JaxArrayWrapper(T...
+    v_component_of_wind      (batch) bfloat16 2B xarray_jax.JaxArrayWrapper(T...
+    vertical_velocity        (batch) bfloat16 2B xarray_jax.JaxArrayWrapper(T...) 
+ ==========
+Output is truncated. View as a scrollable element or open in a text editor. Adjust cell output settings...
+/home/saptarishi.dhanuka_asp25/weather/graphcast_dir/graphcast/graphcast/autoregressive.py:115: FutureWarning: The return type of `Dataset.dims` will be changed to return a set of dimension names in future, in order to be more consistent with `DataArray.dims`. To access a mapping from dimension names to lengths, please use `Dataset.sizes`.
+  num_inputs = inputs.dims['time']
+Here we are printing the loss and diagnostics in autoregressive.py
+<class 'xarray.core.dataarray.DataArray'>
+<xarray.DataArray (batch: 1)> Size: 4B
+xarray_jax.JaxArrayWrapper(Traced<ShapedArray(float32[1])>with<JVPTrace> with
+  primal = Array([19.03125], dtype=float32)
+  tangent = Traced<ShapedArray(float32[1])>with<JaxprTrace> with
+    pval = (ShapedArray(float32[1]), None)
+    recipe = JaxprEqnRecipe(eqn_id=<object object at 0x7f7c84480c80>, in_tracers=(Traced<ShapedArray(float32[1]):JaxprTrace>,), out_tracer_refs=[<weakref at 0x7f7cedce7a60; to 'JaxprTracer' at 0x7f7cedce62f0>], out_avals=[ShapedArray(float32[1])], primitive=convert_element_type, params={'new_dtype': dtype('float32'), 'weak_type': False, 'sharding': None}, effects=frozenset(), source_info=<jax._src.source_info_util.SourceInfo object at 0x7f7c6428ef80>, ctx=JaxprEqnContext(compute_type=None, threefry_partitionable=True, cur_abstract_mesh=(), xla_metadata={})))
+Dimensions without coordinates: batch
+Here we are printing the unwrapped loss and diagnostics in autoregressive.py
+(Traced<ShapedArray(float32[])>with<JVPTrace> with
+  primal = Array(19.03125, dtype=float32)
+  tangent = Traced<ShapedArray(float32[])>with<JaxprTrace> with
+    pval = (ShapedArray(float32[]), None)
+    recipe = JaxprEqnRecipe(eqn_id=<object object at 0x7f7c844818e0>, in_tracers=(Traced<ShapedArray(float32[]):JaxprTrace>, Traced<ShapedArray(float32[]):JaxprTrace>), out_tracer_refs=[<weakref at 0x7f7ceda31850; to 'JaxprTracer' at 0x7f7ceda309a0>], out_avals=[ShapedArray(float32[])], primitive=div, params={}, effects=frozenset(), source_info=<jax._src.source_info_util.SourceInfo object at 0x7f7ce81cd540>, ctx=JaxprEqnContext(compute_type=None, threefry_partitionable=True, cur_abstract_mesh=(), xla_metadata={})), {'10m_u_component_of_wind': Traced<ShapedArray(float32[])>with<JVPTrace> with
+  primal = Array(1.6210938, dtype=float32)
+  tangent = Traced<ShapedArray(float32[])>with<JaxprTrace> with
+    pval = (ShapedArray(float32[]), None)
+    recipe = JaxprEqnRecipe(eqn_id=<object object at 0x7f7c844819b0>, in_tracers=(Traced<ShapedArray(float32[]):JaxprTrace>, Traced<ShapedArray(float32[]):JaxprTrace>), out_tracer_refs=[<weakref at 0x7f7ceda31a30; to 'JaxprTracer' at 0x7f7ceda328e0>], out_avals=[ShapedArray(float32[])], primitive=div, params={}, effects=frozenset(), source_info=<jax._src.source_info_util.SourceInfo object at 0x7f7ce815eec0>, ctx=JaxprEqnContext(compute_type=None, threefry_partitionable=True, cur_abstract_mesh=(), xla_metadata={})), '10m_v_component_of_wind': Traced<ShapedArray(float32[])>with<JVPTrace> with
+  primal = Array(0.7548828, dtype=float32)
+  tangent = Traced<ShapedArray(float32[])>with<JaxprTrace> with
+    pval = (ShapedArray(float32[]), None)
+    recipe = JaxprEqnRecipe(eqn_id=<object object at 0x7f7c84481ab0>, in_tracers=(Traced<ShapedArray(float32[]):JaxprTrace>, Traced<ShapedArray(float32[]):JaxprTrace>), out_tracer_refs=[<weakref at 0x7f7ceda322f0; to 'JaxprTracer' at 0x7f7ceda33d30>], out_avals=[ShapedArray(float32[])], primitive=div, params={}, effects=frozenset(), source_info=<jax._src.source_info_util.SourceInfo object at 0x7f7ca4239a20>, ctx=JaxprEqnContext(compute_type=None, threefry_partitionable=True, cur_abstract_mesh=(), xla_metadata={})), '2m_temperature': Traced<ShapedArray(float32[])>with<JVPTrace> with
+  primal = Array(1.984375, dtype=float32)
+  tangent = Traced<ShapedArray(float32[])>with<JaxprTrace> with
+...
+    pval = (ShapedArray(float32[1]), None)
+    recipe = JaxprEqnRecipe(eqn_id=<object object at 0x7f7c84480c80>, in_tracers=(Traced<ShapedArray(float32[1]):JaxprTrace>,), out_tracer_refs=[<weakref at 0x7f7cedce7a60; to 'JaxprTracer' at 0x7f7cedce62f0>], out_avals=[ShapedArray(float32[1])], primitive=convert_element_type, params={'new_dtype': dtype('float32'), 'weak_type': False, 'sharding': None}, effects=frozenset(), source_info=<jax._src.source_info_util.SourceInfo object at 0x7f7c6428ef80>, ctx=JaxprEqnContext(compute_type=None, threefry_partitionable=True, cur_abstract_mesh=(), xla_metadata={})))
+Dimensions without coordinates: batch
+Losses calculated, now updating
+Output is truncated. View as a scrollable element or open in a text editor. Adjust cell output settings...
+Applying updates
+
+ =========== Loss for time batch number: 1 = 19.03125 =========== 
+
+Train Inputs:   {'batch': 1, 'time': 2, 'lat': 181, 'lon': 360, 'level': 13}
+Train Targets:  {'batch': 1, 'time': 2, 'lat': 181, 'lon': 360, 'level': 13}
+Train Forcings: {'batch': 1, 'time': 2, 'lat': 181, 'lon': 360}
+Setting up grads function
+/home/saptarishi.dhanuka_asp25/weather/graphcast_dir/graphcast/graphcast/autoregressive.py:290: FutureWarning: The return type of `Dataset.dims` will be changed to return a set of dimension names in future, in order to be more consistent with `DataArray.dims`. To access a mapping from dimension names to lengths, please use `Dataset.sizes`.
+  scan_length = targets.dims['time']
+<class 'xarray.core.dataarray.DataArray'>
+<class 'xarray.core.dataarray.DataArray'>
+<class 'xarray.core.dataarray.DataArray'>
+<class 'xarray.core.dataarray.DataArray'>
+<class 'xarray.core.dataarray.DataArray'>
+<class 'xarray.core.dataarray.DataArray'>
+<class 'xarray.core.dataarray.DataArray'>
+<class 'xarray.core.dataarray.DataArray'>
+<class 'xarray.core.dataarray.DataArray'>
+<class 'xarray.core.dataarray.DataArray'>
+<class 'xarray.core.dataarray.DataArray'>
+Sum per var for losses: (<xarray.DataArray '10m_u_component_of_wind' (batch: 1)> Size: 2B
+xarray_jax.JaxArrayWrapper(Traced<ShapedArray(bfloat16[1])>with<DynamicJaxprTrace>)
+Dimensions without coordinates: batch, <xarray.Dataset> Size: 22B
+Dimensions:                  (batch: 1)
+Dimensions without coordinates: batch
+Data variables:
+    10m_u_component_of_wind  (batch) bfloat16 2B xarray_jax.JaxArrayWrapper(T...
+    10m_v_component_of_wind  (batch) bfloat16 2B xarray_jax.JaxArrayWrapper(T...
+    2m_temperature           (batch) bfloat16 2B xarray_jax.JaxArrayWrapper(T...
+    geopotential             (batch) bfloat16 2B xarray_jax.JaxArrayWrapper(T...
+    mean_sea_level_pressure  (batch) bfloat16 2B xarray_jax.JaxArrayWrapper(T...
+    specific_humidity        (batch) bfloat16 2B xarray_jax.JaxArrayWrapper(T...
+    temperature              (batch) bfloat16 2B xarray_jax.JaxArrayWrapper(T...
+    total_precipitation_6hr  (batch) bfloat16 2B xarray_jax.JaxArrayWrapper(T...
+...
+    u_component_of_wind      (batch) bfloat16 2B xarray_jax.JaxArrayWrapper(T...
+    v_component_of_wind      (batch) bfloat16 2B xarray_jax.JaxArrayWrapper(T...
+    vertical_velocity        (batch) bfloat16 2B xarray_jax.JaxArrayWrapper(T...) 
+ ==========
+Output is truncated. View as a scrollable element or open in a text editor. Adjust cell output settings...
+/home/saptarishi.dhanuka_asp25/weather/graphcast_dir/graphcast/graphcast/autoregressive.py:115: FutureWarning: The return type of `Dataset.dims` will be changed to return a set of dimension names in future, in order to be more consistent with `DataArray.dims`. To access a mapping from dimension names to lengths, please use `Dataset.sizes`.
+  num_inputs = inputs.dims['time']
+<class 'xarray.core.dataarray.DataArray'>
+<class 'xarray.core.dataarray.DataArray'>
+<class 'xarray.core.dataarray.DataArray'>
+<class 'xarray.core.dataarray.DataArray'>
+<class 'xarray.core.dataarray.DataArray'>
+<class 'xarray.core.dataarray.DataArray'>
+<class 'xarray.core.dataarray.DataArray'>
+<class 'xarray.core.dataarray.DataArray'>
+<class 'xarray.core.dataarray.DataArray'>
+<class 'xarray.core.dataarray.DataArray'>
+<class 'xarray.core.dataarray.DataArray'>
+Sum per var for losses: (<xarray.DataArray '10m_u_component_of_wind' (batch: 1)> Size: 2B
+xarray_jax.JaxArrayWrapper(Traced<ShapedArray(bfloat16[1])>with<DynamicJaxprTrace>)
+Dimensions without coordinates: batch, <xarray.Dataset> Size: 22B
+Dimensions:                  (batch: 1)
+Dimensions without coordinates: batch
+Data variables:
+    10m_u_component_of_wind  (batch) bfloat16 2B xarray_jax.JaxArrayWrapper(T...
+    10m_v_component_of_wind  (batch) bfloat16 2B xarray_jax.JaxArrayWrapper(T...
+    2m_temperature           (batch) bfloat16 2B xarray_jax.JaxArrayWrapper(T...
+    geopotential             (batch) bfloat16 2B xarray_jax.JaxArrayWrapper(T...
+    mean_sea_level_pressure  (batch) bfloat16 2B xarray_jax.JaxArrayWrapper(T...
+    specific_humidity        (batch) bfloat16 2B xarray_jax.JaxArrayWrapper(T...
+    temperature              (batch) bfloat16 2B xarray_jax.JaxArrayWrapper(T...
+    total_precipitation_6hr  (batch) bfloat16 2B xarray_jax.JaxArrayWrapper(T...
+...
+    u_component_of_wind      (batch) bfloat16 2B xarray_jax.JaxArrayWrapper(T...
+    v_component_of_wind      (batch) bfloat16 2B xarray_jax.JaxArrayWrapper(T...
+    vertical_velocity        (batch) bfloat16 2B xarray_jax.JaxArrayWrapper(T...) 
+ ==========
+Output is truncated. View as a scrollable element or open in a text editor. Adjust cell output settings...
+/home/saptarishi.dhanuka_asp25/weather/graphcast_dir/graphcast/graphcast/autoregressive.py:115: FutureWarning: The return type of `Dataset.dims` will be changed to return a set of dimension names in future, in order to be more consistent with `DataArray.dims`. To access a mapping from dimension names to lengths, please use `Dataset.sizes`.
+  num_inputs = inputs.dims['time']
+Here we are printing the loss and diagnostics in autoregressive.py
+<class 'xarray.core.dataarray.DataArray'>
+<xarray.DataArray (batch: 1)> Size: 4B
+xarray_jax.JaxArrayWrapper(Traced<ShapedArray(float32[1])>with<JVPTrace> with
+  primal = Array([15.], dtype=float32)
+  tangent = Traced<ShapedArray(float32[1])>with<JaxprTrace> with
+    pval = (ShapedArray(float32[1]), None)
+    recipe = JaxprEqnRecipe(eqn_id=<object object at 0x7f7ba475fc10>, in_tracers=(Traced<ShapedArray(float32[1]):JaxprTrace>,), out_tracer_refs=[<weakref at 0x7f7ceda18f90; to 'JaxprTracer' at 0x7f7cec14c040>], out_avals=[ShapedArray(float32[1])], primitive=convert_element_type, params={'new_dtype': dtype('float32'), 'weak_type': False, 'sharding': None}, effects=frozenset(), source_info=<jax._src.source_info_util.SourceInfo object at 0x7f7ba44db1c0>, ctx=JaxprEqnContext(compute_type=None, threefry_partitionable=True, cur_abstract_mesh=(), xla_metadata={})))
+Dimensions without coordinates: batch
+Here we are printing the unwrapped loss and diagnostics in autoregressive.py
+(Traced<ShapedArray(float32[])>with<JVPTrace> with
+  primal = Array(15., dtype=float32)
+  tangent = Traced<ShapedArray(float32[])>with<JaxprTrace> with
+    pval = (ShapedArray(float32[]), None)
+    recipe = JaxprEqnRecipe(eqn_id=<object object at 0x7f7c444dce90>, in_tracers=(Traced<ShapedArray(float32[]):JaxprTrace>, Traced<ShapedArray(float32[]):JaxprTrace>), out_tracer_refs=[<weakref at 0x7f7ced9e76a0; to 'JaxprTracer' at 0x7f7ced9e5670>], out_avals=[ShapedArray(float32[])], primitive=div, params={}, effects=frozenset(), source_info=<jax._src.source_info_util.SourceInfo object at 0x7f7bc412c9a0>, ctx=JaxprEqnContext(compute_type=None, threefry_partitionable=True, cur_abstract_mesh=(), xla_metadata={})), {'10m_u_component_of_wind': Traced<ShapedArray(float32[])>with<JVPTrace> with
+  primal = Array(1.0908203, dtype=float32)
+  tangent = Traced<ShapedArray(float32[])>with<JaxprTrace> with
+    pval = (ShapedArray(float32[]), None)
+    recipe = JaxprEqnRecipe(eqn_id=<object object at 0x7f7c444dca20>, in_tracers=(Traced<ShapedArray(float32[]):JaxprTrace>, Traced<ShapedArray(float32[]):JaxprTrace>), out_tracer_refs=[<weakref at 0x7f7ced9e68e0; to 'JaxprTracer' at 0x7f7ced9e6bb0>], out_avals=[ShapedArray(float32[])], primitive=div, params={}, effects=frozenset(), source_info=<jax._src.source_info_util.SourceInfo object at 0x7f7bc41182b0>, ctx=JaxprEqnContext(compute_type=None, threefry_partitionable=True, cur_abstract_mesh=(), xla_metadata={})), '10m_v_component_of_wind': Traced<ShapedArray(float32[])>with<JVPTrace> with
+  primal = Array(0.7050781, dtype=float32)
+  tangent = Traced<ShapedArray(float32[])>with<JaxprTrace> with
+    pval = (ShapedArray(float32[]), None)
+    recipe = JaxprEqnRecipe(eqn_id=<object object at 0x7f7c444deb30>, in_tracers=(Traced<ShapedArray(float32[]):JaxprTrace>, Traced<ShapedArray(float32[]):JaxprTrace>), out_tracer_refs=[<weakref at 0x7f7ced9e6610; to 'JaxprTracer' at 0x7f7ced9e63e0>], out_avals=[ShapedArray(float32[])], primitive=div, params={}, effects=frozenset(), source_info=<jax._src.source_info_util.SourceInfo object at 0x7f7bc41187f0>, ctx=JaxprEqnContext(compute_type=None, threefry_partitionable=True, cur_abstract_mesh=(), xla_metadata={})), '2m_temperature': Traced<ShapedArray(float32[])>with<JVPTrace> with
+  primal = Array(2., dtype=float32)
+  tangent = Traced<ShapedArray(float32[])>with<JaxprTrace> with
+...
+    pval = (ShapedArray(float32[1]), None)
+    recipe = JaxprEqnRecipe(eqn_id=<object object at 0x7f7ba475fc10>, in_tracers=(Traced<ShapedArray(float32[1]):JaxprTrace>,), out_tracer_refs=[<weakref at 0x7f7ceda18f90; to 'JaxprTracer' at 0x7f7cec14c040>], out_avals=[ShapedArray(float32[1])], primitive=convert_element_type, params={'new_dtype': dtype('float32'), 'weak_type': False, 'sharding': None}, effects=frozenset(), source_info=<jax._src.source_info_util.SourceInfo object at 0x7f7ba44db1c0>, ctx=JaxprEqnContext(compute_type=None, threefry_partitionable=True, cur_abstract_mesh=(), xla_metadata={})))
+Dimensions without coordinates: batch
+Losses calculated, now updating
+Output is truncated. View as a scrollable element or open in a text editor. Adjust cell output settings...
+Applying updates
+
+ =========== Loss for time batch number: 2 = 15.0 =========== 
+
+Train Inputs:   {'batch': 1, 'time': 2, 'lat': 181, 'lon': 360, 'level': 13}
+Train Targets:  {'batch': 1, 'time': 2, 'lat': 181, 'lon': 360, 'level': 13}
+Train Forcings: {'batch': 1, 'time': 2, 'lat': 181, 'lon': 360}
+Setting up grads function
+/home/saptarishi.dhanuka_asp25/weather/graphcast_dir/graphcast/graphcast/autoregressive.py:290: FutureWarning: The return type of `Dataset.dims` will be changed to return a set of dimension names in future, in order to be more consistent with `DataArray.dims`. To access a mapping from dimension names to lengths, please use `Dataset.sizes`.
+  scan_length = targets.dims['time']
+<class 'xarray.core.dataarray.DataArray'>
+<class 'xarray.core.dataarray.DataArray'>
+<class 'xarray.core.dataarray.DataArray'>
+<class 'xarray.core.dataarray.DataArray'>
+<class 'xarray.core.dataarray.DataArray'>
+<class 'xarray.core.dataarray.DataArray'>
+<class 'xarray.core.dataarray.DataArray'>
+<class 'xarray.core.dataarray.DataArray'>
+<class 'xarray.core.dataarray.DataArray'>
+<class 'xarray.core.dataarray.DataArray'>
+<class 'xarray.core.dataarray.DataArray'>
+Sum per var for losses: (<xarray.DataArray '10m_u_component_of_wind' (batch: 1)> Size: 2B
+xarray_jax.JaxArrayWrapper(Traced<ShapedArray(bfloat16[1])>with<DynamicJaxprTrace>)
+Dimensions without coordinates: batch, <xarray.Dataset> Size: 22B
+Dimensions:                  (batch: 1)
+Dimensions without coordinates: batch
+Data variables:
+    10m_u_component_of_wind  (batch) bfloat16 2B xarray_jax.JaxArrayWrapper(T...
+    10m_v_component_of_wind  (batch) bfloat16 2B xarray_jax.JaxArrayWrapper(T...
+    2m_temperature           (batch) bfloat16 2B xarray_jax.JaxArrayWrapper(T...
+    geopotential             (batch) bfloat16 2B xarray_jax.JaxArrayWrapper(T...
+    mean_sea_level_pressure  (batch) bfloat16 2B xarray_jax.JaxArrayWrapper(T...
+    specific_humidity        (batch) bfloat16 2B xarray_jax.JaxArrayWrapper(T...
+    temperature              (batch) bfloat16 2B xarray_jax.JaxArrayWrapper(T...
+    total_precipitation_6hr  (batch) bfloat16 2B xarray_jax.JaxArrayWrapper(T...
+...
+    u_component_of_wind      (batch) bfloat16 2B xarray_jax.JaxArrayWrapper(T...
+    v_component_of_wind      (batch) bfloat16 2B xarray_jax.JaxArrayWrapper(T...
+    vertical_velocity        (batch) bfloat16 2B xarray_jax.JaxArrayWrapper(T...) 
+ ==========
+Output is truncated. View as a scrollable element or open in a text editor. Adjust cell output settings...
+/home/saptarishi.dhanuka_asp25/weather/graphcast_dir/graphcast/graphcast/autoregressive.py:115: FutureWarning: The return type of `Dataset.dims` will be changed to return a set of dimension names in future, in order to be more consistent with `DataArray.dims`. To access a mapping from dimension names to lengths, please use `Dataset.sizes`.
+  num_inputs = inputs.dims['time']
+<class 'xarray.core.dataarray.DataArray'>
+<class 'xarray.core.dataarray.DataArray'>
+<class 'xarray.core.dataarray.DataArray'>
+<class 'xarray.core.dataarray.DataArray'>
+<class 'xarray.core.dataarray.DataArray'>
+<class 'xarray.core.dataarray.DataArray'>
+<class 'xarray.core.dataarray.DataArray'>
+<class 'xarray.core.dataarray.DataArray'>
+<class 'xarray.core.dataarray.DataArray'>
+<class 'xarray.core.dataarray.DataArray'>
+<class 'xarray.core.dataarray.DataArray'>
+Sum per var for losses: (<xarray.DataArray '10m_u_component_of_wind' (batch: 1)> Size: 2B
+xarray_jax.JaxArrayWrapper(Traced<ShapedArray(bfloat16[1])>with<DynamicJaxprTrace>)
+Dimensions without coordinates: batch, <xarray.Dataset> Size: 22B
+Dimensions:                  (batch: 1)
+Dimensions without coordinates: batch
+Data variables:
+    10m_u_component_of_wind  (batch) bfloat16 2B xarray_jax.JaxArrayWrapper(T...
+    10m_v_component_of_wind  (batch) bfloat16 2B xarray_jax.JaxArrayWrapper(T...
+    2m_temperature           (batch) bfloat16 2B xarray_jax.JaxArrayWrapper(T...
+    geopotential             (batch) bfloat16 2B xarray_jax.JaxArrayWrapper(T...
+    mean_sea_level_pressure  (batch) bfloat16 2B xarray_jax.JaxArrayWrapper(T...
+    specific_humidity        (batch) bfloat16 2B xarray_jax.JaxArrayWrapper(T...
+    temperature              (batch) bfloat16 2B xarray_jax.JaxArrayWrapper(T...
+    total_precipitation_6hr  (batch) bfloat16 2B xarray_jax.JaxArrayWrapper(T...
+...
+    u_component_of_wind      (batch) bfloat16 2B xarray_jax.JaxArrayWrapper(T...
+    v_component_of_wind      (batch) bfloat16 2B xarray_jax.JaxArrayWrapper(T...
+    vertical_velocity        (batch) bfloat16 2B xarray_jax.JaxArrayWrapper(T...) 
+ ==========
+Output is truncated. View as a scrollable element or open in a text editor. Adjust cell output settings...
+/home/saptarishi.dhanuka_asp25/weather/graphcast_dir/graphcast/graphcast/autoregressive.py:115: FutureWarning: The return type of `Dataset.dims` will be changed to return a set of dimension names in future, in order to be more consistent with `DataArray.dims`. To access a mapping from dimension names to lengths, please use `Dataset.sizes`.
+  num_inputs = inputs.dims['time']
+Here we are printing the loss and diagnostics in autoregressive.py
+<class 'xarray.core.dataarray.DataArray'>
+<xarray.DataArray (batch: 1)> Size: 4B
+xarray_jax.JaxArrayWrapper(Traced<ShapedArray(float32[1])>with<JVPTrace> with
+  primal = Array([7.1875], dtype=float32)
+  tangent = Traced<ShapedArray(float32[1])>with<JaxprTrace> with
+    pval = (ShapedArray(float32[1]), None)
+    recipe = JaxprEqnRecipe(eqn_id=<object object at 0x7f7ae4526220>, in_tracers=(Traced<ShapedArray(float32[1]):JaxprTrace>,), out_tracer_refs=[<weakref at 0x7f7cef50a840; to 'JaxprTracer' at 0x7f7ceda1d2b0>], out_avals=[ShapedArray(float32[1])], primitive=convert_element_type, params={'new_dtype': dtype('float32'), 'weak_type': False, 'sharding': None}, effects=frozenset(), source_info=<jax._src.source_info_util.SourceInfo object at 0x7f7ae41769b0>, ctx=JaxprEqnContext(compute_type=None, threefry_partitionable=True, cur_abstract_mesh=(), xla_metadata={})))
+Dimensions without coordinates: batch
+Here we are printing the unwrapped loss and diagnostics in autoregressive.py
+(Traced<ShapedArray(float32[])>with<JVPTrace> with
+  primal = Array(7.1875, dtype=float32)
+  tangent = Traced<ShapedArray(float32[])>with<JaxprTrace> with
+    pval = (ShapedArray(float32[]), None)
+    recipe = JaxprEqnRecipe(eqn_id=<object object at 0x7f7ae4526d50>, in_tracers=(Traced<ShapedArray(float32[]):JaxprTrace>, Traced<ShapedArray(float32[]):JaxprTrace>), out_tracer_refs=[<weakref at 0x7f7cedb72b10; to 'JaxprTracer' at 0x7f7cedb70fe0>], out_avals=[ShapedArray(float32[])], primitive=div, params={}, effects=frozenset(), source_info=<jax._src.source_info_util.SourceInfo object at 0x7f7ae47845e0>, ctx=JaxprEqnContext(compute_type=None, threefry_partitionable=True, cur_abstract_mesh=(), xla_metadata={})), {'10m_u_component_of_wind': Traced<ShapedArray(float32[])>with<JVPTrace> with
+  primal = Array(0.48339844, dtype=float32)
+  tangent = Traced<ShapedArray(float32[])>with<JaxprTrace> with
+    pval = (ShapedArray(float32[]), None)
+    recipe = JaxprEqnRecipe(eqn_id=<object object at 0x7f7ae4526f30>, in_tracers=(Traced<ShapedArray(float32[]):JaxprTrace>, Traced<ShapedArray(float32[]):JaxprTrace>), out_tracer_refs=[<weakref at 0x7f7cedb723e0; to 'JaxprTracer' at 0x7f7cedb71670>], out_avals=[ShapedArray(float32[])], primitive=div, params={}, effects=frozenset(), source_info=<jax._src.source_info_util.SourceInfo object at 0x7f7ae476cf70>, ctx=JaxprEqnContext(compute_type=None, threefry_partitionable=True, cur_abstract_mesh=(), xla_metadata={})), '10m_v_component_of_wind': Traced<ShapedArray(float32[])>with<JVPTrace> with
+  primal = Array(0.3725586, dtype=float32)
+  tangent = Traced<ShapedArray(float32[])>with<JaxprTrace> with
+    pval = (ShapedArray(float32[]), None)
+    recipe = JaxprEqnRecipe(eqn_id=<object object at 0x7f7ae4527040>, in_tracers=(Traced<ShapedArray(float32[]):JaxprTrace>, Traced<ShapedArray(float32[]):JaxprTrace>), out_tracer_refs=[<weakref at 0x7f7ceea960c0; to 'JaxprTracer' at 0x7f7cedb70220>], out_avals=[ShapedArray(float32[])], primitive=div, params={}, effects=frozenset(), source_info=<jax._src.source_info_util.SourceInfo object at 0x7f7ae4750040>, ctx=JaxprEqnContext(compute_type=None, threefry_partitionable=True, cur_abstract_mesh=(), xla_metadata={})), '2m_temperature': Traced<ShapedArray(float32[])>with<JVPTrace> with
+  primal = Array(0.54296875, dtype=float32)
+  tangent = Traced<ShapedArray(float32[])>with<JaxprTrace> with
+...
+    pval = (ShapedArray(float32[1]), None)
+    recipe = JaxprEqnRecipe(eqn_id=<object object at 0x7f7ae4526220>, in_tracers=(Traced<ShapedArray(float32[1]):JaxprTrace>,), out_tracer_refs=[<weakref at 0x7f7cef50a840; to 'JaxprTracer' at 0x7f7ceda1d2b0>], out_avals=[ShapedArray(float32[1])], primitive=convert_element_type, params={'new_dtype': dtype('float32'), 'weak_type': False, 'sharding': None}, effects=frozenset(), source_info=<jax._src.source_info_util.SourceInfo object at 0x7f7ae41769b0>, ctx=JaxprEqnContext(compute_type=None, threefry_partitionable=True, cur_abstract_mesh=(), xla_metadata={})))
+Dimensions without coordinates: batch
+Losses calculated, now updating
+Output is truncated. View as a scrollable element or open in a text editor. Adjust cell output settings...
+Applying updates
+
+ =========== Loss for time batch number: 3 = 7.1875 =========== 
+
+Train Inputs:   {'batch': 1, 'time': 2, 'lat': 181, 'lon': 360, 'level': 13}
+Train Targets:  {'batch': 1, 'time': 2, 'lat': 181, 'lon': 360, 'level': 13}
+Train Forcings: {'batch': 1, 'time': 2, 'lat': 181, 'lon': 360}
+Setting up grads function
+/home/saptarishi.dhanuka_asp25/weather/graphcast_dir/graphcast/graphcast/autoregressive.py:290: FutureWarning: The return type of `Dataset.dims` will be changed to return a set of dimension names in future, in order to be more consistent with `DataArray.dims`. To access a mapping from dimension names to lengths, please use `Dataset.sizes`.
+  scan_length = targets.dims['time']
+<class 'xarray.core.dataarray.DataArray'>
+<class 'xarray.core.dataarray.DataArray'>
+<class 'xarray.core.dataarray.DataArray'>
+<class 'xarray.core.dataarray.DataArray'>
+<class 'xarray.core.dataarray.DataArray'>
+<class 'xarray.core.dataarray.DataArray'>
+<class 'xarray.core.dataarray.DataArray'>
+<class 'xarray.core.dataarray.DataArray'>
+<class 'xarray.core.dataarray.DataArray'>
+<class 'xarray.core.dataarray.DataArray'>
+<class 'xarray.core.dataarray.DataArray'>
+Sum per var for losses: (<xarray.DataArray '10m_u_component_of_wind' (batch: 1)> Size: 2B
+xarray_jax.JaxArrayWrapper(Traced<ShapedArray(bfloat16[1])>with<DynamicJaxprTrace>)
+Dimensions without coordinates: batch, <xarray.Dataset> Size: 22B
+Dimensions:                  (batch: 1)
+Dimensions without coordinates: batch
+Data variables:
+    10m_u_component_of_wind  (batch) bfloat16 2B xarray_jax.JaxArrayWrapper(T...
+    10m_v_component_of_wind  (batch) bfloat16 2B xarray_jax.JaxArrayWrapper(T...
+    2m_temperature           (batch) bfloat16 2B xarray_jax.JaxArrayWrapper(T...
+    geopotential             (batch) bfloat16 2B xarray_jax.JaxArrayWrapper(T...
+    mean_sea_level_pressure  (batch) bfloat16 2B xarray_jax.JaxArrayWrapper(T...
+    specific_humidity        (batch) bfloat16 2B xarray_jax.JaxArrayWrapper(T...
+    temperature              (batch) bfloat16 2B xarray_jax.JaxArrayWrapper(T...
+    total_precipitation_6hr  (batch) bfloat16 2B xarray_jax.JaxArrayWrapper(T...
+...
+    u_component_of_wind      (batch) bfloat16 2B xarray_jax.JaxArrayWrapper(T...
+    v_component_of_wind      (batch) bfloat16 2B xarray_jax.JaxArrayWrapper(T...
+    vertical_velocity        (batch) bfloat16 2B xarray_jax.JaxArrayWrapper(T...) 
+ ==========
+Output is truncated. View as a scrollable element or open in a text editor. Adjust cell output settings...
+/home/saptarishi.dhanuka_asp25/weather/graphcast_dir/graphcast/graphcast/autoregressive.py:115: FutureWarning: The return type of `Dataset.dims` will be changed to return a set of dimension names in future, in order to be more consistent with `DataArray.dims`. To access a mapping from dimension names to lengths, please use `Dataset.sizes`.
+  num_inputs = inputs.dims['time']
+<class 'xarray.core.dataarray.DataArray'>
+<class 'xarray.core.dataarray.DataArray'>
+<class 'xarray.core.dataarray.DataArray'>
+<class 'xarray.core.dataarray.DataArray'>
+<class 'xarray.core.dataarray.DataArray'>
+<class 'xarray.core.dataarray.DataArray'>
+<class 'xarray.core.dataarray.DataArray'>
+<class 'xarray.core.dataarray.DataArray'>
+<class 'xarray.core.dataarray.DataArray'>
+<class 'xarray.core.dataarray.DataArray'>
+<class 'xarray.core.dataarray.DataArray'>
+Sum per var for losses: (<xarray.DataArray '10m_u_component_of_wind' (batch: 1)> Size: 2B
+xarray_jax.JaxArrayWrapper(Traced<ShapedArray(bfloat16[1])>with<DynamicJaxprTrace>)
+Dimensions without coordinates: batch, <xarray.Dataset> Size: 22B
+Dimensions:                  (batch: 1)
+Dimensions without coordinates: batch
+Data variables:
+    10m_u_component_of_wind  (batch) bfloat16 2B xarray_jax.JaxArrayWrapper(T...
+    10m_v_component_of_wind  (batch) bfloat16 2B xarray_jax.JaxArrayWrapper(T...
+    2m_temperature           (batch) bfloat16 2B xarray_jax.JaxArrayWrapper(T...
+    geopotential             (batch) bfloat16 2B xarray_jax.JaxArrayWrapper(T...
+    mean_sea_level_pressure  (batch) bfloat16 2B xarray_jax.JaxArrayWrapper(T...
+    specific_humidity        (batch) bfloat16 2B xarray_jax.JaxArrayWrapper(T...
+    temperature              (batch) bfloat16 2B xarray_jax.JaxArrayWrapper(T...
+    total_precipitation_6hr  (batch) bfloat16 2B xarray_jax.JaxArrayWrapper(T...
+...
+    u_component_of_wind      (batch) bfloat16 2B xarray_jax.JaxArrayWrapper(T...
+    v_component_of_wind      (batch) bfloat16 2B xarray_jax.JaxArrayWrapper(T...
+    vertical_velocity        (batch) bfloat16 2B xarray_jax.JaxArrayWrapper(T...) 
+ ==========
+Output is truncated. View as a scrollable element or open in a text editor. Adjust cell output settings...
+/home/saptarishi.dhanuka_asp25/weather/graphcast_dir/graphcast/graphcast/autoregressive.py:115: FutureWarning: The return type of `Dataset.dims` will be changed to return a set of dimension names in future, in order to be more consistent with `DataArray.dims`. To access a mapping from dimension names to lengths, please use `Dataset.sizes`.
+  num_inputs = inputs.dims['time']
+Here we are printing the loss and diagnostics in autoregressive.py
+<class 'xarray.core.dataarray.DataArray'>
+<xarray.DataArray (batch: 1)> Size: 4B
+xarray_jax.JaxArrayWrapper(Traced<ShapedArray(float32[1])>with<JVPTrace> with
+  primal = Array([9.015625], dtype=float32)
+  tangent = Traced<ShapedArray(float32[1])>with<JaxprTrace> with
+    pval = (ShapedArray(float32[1]), None)
+    recipe = JaxprEqnRecipe(eqn_id=<object object at 0x7f7a68246260>, in_tracers=(Traced<ShapedArray(float32[1]):JaxprTrace>,), out_tracer_refs=[<weakref at 0x7f7cedcbe200; to 'JaxprTracer' at 0x7f7cedcbfec0>], out_avals=[ShapedArray(float32[1])], primitive=convert_element_type, params={'new_dtype': dtype('float32'), 'weak_type': False, 'sharding': None}, effects=frozenset(), source_info=<jax._src.source_info_util.SourceInfo object at 0x7f7a14767eb0>, ctx=JaxprEqnContext(compute_type=None, threefry_partitionable=True, cur_abstract_mesh=(), xla_metadata={})))
+Dimensions without coordinates: batch
+Here we are printing the unwrapped loss and diagnostics in autoregressive.py
+(Traced<ShapedArray(float32[])>with<JVPTrace> with
+  primal = Array(9.015625, dtype=float32)
+  tangent = Traced<ShapedArray(float32[])>with<JaxprTrace> with
+    pval = (ShapedArray(float32[]), None)
+    recipe = JaxprEqnRecipe(eqn_id=<object object at 0x7f7a68246b70>, in_tracers=(Traced<ShapedArray(float32[]):JaxprTrace>, Traced<ShapedArray(float32[]):JaxprTrace>), out_tracer_refs=[<weakref at 0x7f7ced990b30; to 'JaxprTracer' at 0x7f7cedbaff10>], out_avals=[ShapedArray(float32[])], primitive=div, params={}, effects=frozenset(), source_info=<jax._src.source_info_util.SourceInfo object at 0x7f7a146c4cd0>, ctx=JaxprEqnContext(compute_type=None, threefry_partitionable=True, cur_abstract_mesh=(), xla_metadata={})), {'10m_u_component_of_wind': Traced<ShapedArray(float32[])>with<JVPTrace> with
+  primal = Array(0.5214844, dtype=float32)
+  tangent = Traced<ShapedArray(float32[])>with<JaxprTrace> with
+    pval = (ShapedArray(float32[]), None)
+    recipe = JaxprEqnRecipe(eqn_id=<object object at 0x7f7a68246f60>, in_tracers=(Traced<ShapedArray(float32[]):JaxprTrace>, Traced<ShapedArray(float32[]):JaxprTrace>), out_tracer_refs=[<weakref at 0x7f7cedc9cc70; to 'JaxprTracer' at 0x7f7ced992200>], out_avals=[ShapedArray(float32[])], primitive=div, params={}, effects=frozenset(), source_info=<jax._src.source_info_util.SourceInfo object at 0x7f7a146c4be0>, ctx=JaxprEqnContext(compute_type=None, threefry_partitionable=True, cur_abstract_mesh=(), xla_metadata={})), '10m_v_component_of_wind': Traced<ShapedArray(float32[])>with<JVPTrace> with
+  primal = Array(0.453125, dtype=float32)
+  tangent = Traced<ShapedArray(float32[])>with<JaxprTrace> with
+    pval = (ShapedArray(float32[]), None)
+    recipe = JaxprEqnRecipe(eqn_id=<object object at 0x7f7a68247080>, in_tracers=(Traced<ShapedArray(float32[]):JaxprTrace>, Traced<ShapedArray(float32[]):JaxprTrace>), out_tracer_refs=[<weakref at 0x7f7cedc9fb00; to 'JaxprTracer' at 0x7f7cedc9d300>], out_avals=[ShapedArray(float32[])], primitive=div, params={}, effects=frozenset(), source_info=<jax._src.source_info_util.SourceInfo object at 0x7f7a146e20e0>, ctx=JaxprEqnContext(compute_type=None, threefry_partitionable=True, cur_abstract_mesh=(), xla_metadata={})), '2m_temperature': Traced<ShapedArray(float32[])>with<JVPTrace> with
+  primal = Array(0.37890625, dtype=float32)
+  tangent = Traced<ShapedArray(float32[])>with<JaxprTrace> with
+...
+    pval = (ShapedArray(float32[1]), None)
+    recipe = JaxprEqnRecipe(eqn_id=<object object at 0x7f7a68246260>, in_tracers=(Traced<ShapedArray(float32[1]):JaxprTrace>,), out_tracer_refs=[<weakref at 0x7f7cedcbe200; to 'JaxprTracer' at 0x7f7cedcbfec0>], out_avals=[ShapedArray(float32[1])], primitive=convert_element_type, params={'new_dtype': dtype('float32'), 'weak_type': False, 'sharding': None}, effects=frozenset(), source_info=<jax._src.source_info_util.SourceInfo object at 0x7f7a14767eb0>, ctx=JaxprEqnContext(compute_type=None, threefry_partitionable=True, cur_abstract_mesh=(), xla_metadata={})))
+Dimensions without coordinates: batch
+Losses calculated, now updating
+Output is truncated. View as a scrollable element or open in a text editor. Adjust cell output settings...
+Training Batches: 100%|██████████| 5/5 [02:17<00:00, 27.51s/it]
+Applying updates
+
+ =========== Loss for time batch number: 4 = 9.015625 =========== 
+
+
+Training Epochs: 100%|██████████| 1/1 [02:18<00:00, 138.84s/it]
+Finished training

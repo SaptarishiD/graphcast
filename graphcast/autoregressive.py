@@ -112,7 +112,7 @@ class Predictor(predictor_base.Predictor):
                        f'forcings, which isn\'t allowed: {overlap}')
 
   def _update_inputs(self, inputs, next_frame):
-    num_inputs = inputs.dims['time']
+    num_inputs = inputs.sizes['time']
 
     predicted_or_forced_inputs = next_frame[list(inputs.keys())]
 
@@ -289,7 +289,7 @@ class Predictor(predictor_base.Predictor):
     if self._gradient_checkpointing:
       scan_length = targets.dims['time']
       if scan_length <= 1:
-        logging.warning(
+        logging.warning(  
             'Skipping gradient checkpointing for sequence length of 1')
       else:
         one_step_loss = hk.remat(one_step_loss)
@@ -308,5 +308,17 @@ class Predictor(predictor_base.Predictor):
         lambda x: xarray_jax.DataArray(x, dims=('time', 'batch')).mean(  # pylint: disable=g-long-lambda
             'time', skipna=False),
         (per_timestep_losses, per_timestep_diagnostics))
+    
+    # print("Here we are printing the loss and diagnostics in autoregressive.py")
+    # print(type(loss))
+    # print(loss)
+
+    # print("Here we are printing the unwrapped loss and diagnostics in autoregressive.py")
+
+    # unwrap = xarray_tree.map_structure(
+    #   lambda x: xarray_jax.unwrap_data(x.mean(), require_jax=True),
+    #   (loss, diagnostics))
+    # print(unwrap)
+
 
     return loss, diagnostics

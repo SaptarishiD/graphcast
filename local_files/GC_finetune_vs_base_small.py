@@ -246,6 +246,7 @@ def plot_loss(epoch_batch_loss, date):
     plt.legend()
     plt.grid(True)
     plt.savefig(f"plots/training/loss_plot{date}.png")
+    plt.close()
 
 def plot_gpu_util(gpu_utilization, gpu_memory, date):
     plt.figure(figsize=(10, 4))
@@ -263,6 +264,7 @@ def plot_gpu_util(gpu_utilization, gpu_memory, date):
 
     plt.tight_layout()
     plt.savefig(f"plots/training/gpu_utilization_memory_plot{date}.png")
+    plt.close()
 
 
 
@@ -304,7 +306,6 @@ def main():
 
     else:
         filename = '/Datastorage/saptarishi.dhanuka_asp25/gc_weights/graphcast_1_13.npz'
-        
         dataset_name = "/Datastorage/saptarishi.dhanuka_asp25/era5_data/arco_era5_1.0_formatted.nc"
 
         arco = xr.open_zarr("/Datastorage/divij.khaitan_asp25/era5/era5_2020.zarr")
@@ -383,16 +384,18 @@ def main():
 
         logger.info(arco1.nbytes)
 
-        select_time = arco1.isel(time=slice(0, 60))
+        select_time = arco1.isel(time=slice(0, 120))
         tik = datetime.now()
 
-        training_trial_batch = select_time.load()
+        select_time_eval = arco1.isel(time=slice(120, 240))
+        eval_trial_batch = select_time_eval.load()
+        # training_trial_batch = select_time.load()
 
         tok = datetime.now()
         # training_trial_batch = training_trial_batch.rename({'time': 'datetime'})
-        logger.info("Training batch time")
-        logger.info(training_trial_batch.coords)
-        logger.info(f"Dataset loaded in {tok - tik}")
+        # logger.info("Training batch time")
+        # logger.info(training_trial_batch.coords)
+        logger.info(f"Eval Dataset loaded in {tok - tik}")
 
         # with open("/Datastorage/saptarishi.dhanuka_asp25/era5_data/dataset_source-era5_date-2022-01-01_res-1.0_levels-13_steps-40.nc", 'rb') as f:
         #     print("Loading Dataset")
@@ -459,22 +462,227 @@ def main():
             state=state
         )
         return predictions
+    
+    eval_inputs, eval_targets, eval_forcings = data_utils.extract_inputs_targets_forcings(
+    eval_trial_batch, target_lead_times=slice("6h", "168h"),
+    **dataclasses.asdict(task_config))
   
 
     # training_trial_batch = generate_sample_era5_dataset(model_config=model_config, task_config=task_config, time_steps = 10)
 
-    assert training_trial_batch.sizes["time"] >= 3
+    assert eval_trial_batch.sizes["time"] >= 3
 
-    logger.info(f"Training batch time dimensions: {training_trial_batch.sizes['time']}")
+    logger.info(f"Eval batch time dimensions: {eval_trial_batch.sizes['time']}")
 
     task_config_dict =  dataclasses.asdict(task_config)
     # task_config_dict.pop('input_duration')
 
-    logger.info("Starting training")
+    logger.info("Starting Eval")
 
-    train_graphcast(training_trial_batch, params, task_config_dict, epochs=3)
+    # train_graphcast(training_trial_batch, params, task_config_dict, epochs=3)
 
-    logger.info("Finished training")
+
+    print("Eval Inputs:   ", eval_inputs.dims.mapping)
+    print("Eval Targets:  ", eval_targets.dims.mapping)
+    print("Eval Forcings: ", eval_forcings.dims.mapping)
+
+    # print("Running chunked predictions")
+
+    # predictions = rollout.chunked_prediction(
+    # run_forward_jitted,
+    # rng=jax.random.PRNGKey(0),
+    # inputs=eval_inputs,
+    # targets_template=eval_targets * np.nan,
+    # forcings=eval_forcings)
+
+    # print("Predictions:   ", predictions.dims.mapping)
+    # predictions.to_netcdf("/Datastorage/saptarishi.dhanuka_asp25/predictions.nc")
+
+    new_params_path = "/home/saptarishi.dhanuka_asp25/weather/graphcast_dir/graphcast/local_files/params/params_finetune_test2025-04-16_23-12.npz"
+
+    new_params = save_params_utils.load_model_params(new_params_path)
+
+    print("Loaded New Params: ", new_params.keys())
+
+    targets_template = eval_targets * np.nan
+
+    print("Running old params")
+    predictions_old = run_model(params, state, eval_inputs, targets_template, eval_forcings)
+
+    print("Predictions Old: ", predictions_old.dims.mapping)
+    predictions_old.to_netcdf("/Datastorage/saptarishi.dhanuka_asp25/predictions_old.nc")
+
+    print("Running new params")
+
+    predictions_finetuned = run_model(new_params, state, eval_inputs, targets_template, eval_forcings)
+    print("Predictions Finetuned: ", predictions_finetuned.dims.mapping)
+    predictions_finetuned.to_netcdf("/Datastorage/saptarishi.dhanuka_asp25/predictions_finetuned.nc")
+
+
+
+
+
+    import cartopy.crs as ccrs
+
+    # Extract the variable of interest (e.g., '2m_temperature')
+    variable_name = '2m_temperature'
+    temperature_pred_old = predictions_old[variable_name]
+    temperature_pred_finetuned = predictions_finetuned[variable_name]
+    temperature_targets = eval_targets[variable_name]
+
+    # Define the time steps to visualize
+    time_steps = list(range(20))  # Adjust as needed
+
+    # Function to plot predictions over India
+    def plot_predictions(time_step):
+        fig, axs = plt.subplots(1, 3, figsize=(18, 6), subplot_kw={'projection': ccrs.PlateCarree()})
+        extent = [68, 98, 6, 38]  # Focus on India
+
+        # Old predictions
+        ax = axs[0]
+        temp_old = temperature_pred_old.isel(time=time_step).squeeze()
+        temp_old.plot.pcolormesh(
+            ax=ax, transform=ccrs.PlateCarree(), cmap='coolwarm',
+            cbar_kwargs={'label': 'Temperature (K)'})
+        ax.set_extent(extent)
+        ax.coastlines()
+        ax.set_title(f"Old Predictions at Time Step {time_step}")
+
+        # Finetuned predictions
+        ax = axs[1]
+        temp_finetuned = temperature_pred_finetuned.isel(time=time_step).squeeze()
+        temp_finetuned.plot.pcolormesh(
+            ax=ax, transform=ccrs.PlateCarree(), cmap='coolwarm',
+            cbar_kwargs={'label': 'Temperature (K)'})
+        ax.set_extent(extent)
+        ax.coastlines()
+        ax.set_title(f"Finetuned Predictions at Time Step {time_step}")
+
+        # Difference between finetuned and old predictions
+        ax = axs[2]
+        difference = temp_finetuned - temp_old
+        difference.plot.pcolormesh(
+            ax=ax, transform=ccrs.PlateCarree(), cmap='bwr',
+            cbar_kwargs={'label': 'Temperature Difference (K)'})
+        ax.set_extent(extent)
+        ax.coastlines()
+        ax.set_title(f"Difference at Time Step {time_step}")
+
+        plt.tight_layout()
+        plt.savefig(f'plots/training/predictions_comparison{time_step}.png')
+        plt.close()
+
+    # Plot predictions for each time step
+    for time_step in time_steps:
+        plot_predictions(time_step)
+
+    # Function to plot difference between finetuned predictions and ground truth
+    def plot_difference_with_targets(time_step):
+        fig, ax = plt.subplots(figsize=(8, 6), subplot_kw={'projection': ccrs.PlateCarree()})
+        extent = [68, 98, 6, 38]  # Focus on India
+
+        # Difference between finetuned predictions and evaluation targets
+        temp_finetuned = temperature_pred_finetuned.isel(time=time_step).squeeze()
+        temp_targets = temperature_targets.isel(time=time_step).squeeze()
+        difference = temp_finetuned - temp_targets
+
+        difference.plot.pcolormesh(
+            ax=ax, transform=ccrs.PlateCarree(), cmap='bwr',
+            cbar_kwargs={'label': 'Temperature Difference (K)'})
+        ax.set_extent(extent)
+        ax.coastlines()
+        ax.set_title(f"Finetuned Prediction vs Ground Truth at Time Step {time_step}")
+
+        plt.tight_layout()
+        plt.savefig(f'plots/training/difference_finetuned{time_step}.png')
+        plt.close()
+
+        return (difference)
+
+    # Function to plot difference between base predictions and ground truth
+    def plot_difference_with_targets_base(time_step):
+        fig, ax = plt.subplots(figsize=(8, 6), subplot_kw={'projection': ccrs.PlateCarree()})
+        extent = [68, 98, 6, 38]  # Focus on India
+
+        # Difference between finetuned predictions and evaluation targets
+        temp_old = temperature_pred_old.isel(time=time_step).squeeze()
+        temp_targets = temperature_targets.isel(time=time_step).squeeze()
+        difference = temp_old - temp_targets
+
+        difference.plot.pcolormesh(
+            ax=ax, transform=ccrs.PlateCarree(), cmap='bwr',
+            cbar_kwargs={'label': 'Temperature Difference (K)'})
+        ax.set_extent(extent)
+        ax.coastlines()
+        ax.set_title(f"Base Prediction vs Ground Truth at Time Step {time_step}")
+
+        plt.tight_layout()
+        plt.savefig(f'plots/training/difference_base{time_step}.png')
+        plt.close()
+
+        return (difference)
+
+    # Plot differences with ground truth for each time step
+    differences_finetuned = []
+    differences_base = []
+    for time_step in time_steps:
+        differences_finetuned.append(plot_difference_with_targets(time_step))
+        differences_base.append(plot_difference_with_targets_base(time_step))
+
+    # print(differences_finetuned)
+    # print(differences_base)
+
+
+    def compute_mse(predictions, targets):
+        return ((predictions - targets) ** 2).mean()
+
+    # Compute the MSE for each time step and aggregate
+    mse_finetuned = []
+    mse_base = []
+
+
+    # need to define the extend for india and then calculate metric
+
+    latmin = 8
+    latmax = 37
+    lonmin = 68
+    lonmax = 97
+    
+
+
+    print("Starting subsetting:")
+    for time_step in time_steps:    
+        temp_finetuned = temperature_pred_finetuned.isel(time=time_step).sel(lat=slice(latmax, latmin), lon=slice(lonmin, lonmax))
+        if time_step == 1:
+            print(temp_finetuned.lat, temp_finetuned.lon)
+        temp_finetuned = temp_finetuned.squeeze()
+        
+        temp_old = temperature_pred_old.isel(time=time_step).sel(lat=slice(latmax, latmin), lon=slice(lonmin, lonmax))
+        if time_step == 1:
+        
+            print(temp_old.lat, temp_old.lon)
+        temp_old = temp_old.squeeze()
+
+        temp_targets = temperature_targets.isel(time=time_step).sel(lat=slice(latmax, latmin), lon=slice(lonmin, lonmax))
+        if time_step == 1:
+        
+            print(temp_targets.lat, temp_targets.lon)
+        temp_targets = temp_targets.squeeze()
+
+        mse_finetuned.append(compute_mse(temp_finetuned, temp_targets))
+        mse_base.append(compute_mse(temp_old, temp_targets))
+
+    # Compute the overall loss by averaging the MSE over all time steps
+    overall_loss_finetuned = np.mean(mse_finetuned)
+    overall_loss_base = np.mean(mse_base)
+
+    print(f"Overall Loss (Finetuned Predictions): {overall_loss_finetuned}")
+    print(mse_finetuned)
+    print(f"Overall Loss (Base Predictions): {overall_loss_base}")
+    print(mse_base)
+
+
+    logger.info("Finished inference")
 
     # can add evaluation and comparison code here after testing everything for a few timesteps
 

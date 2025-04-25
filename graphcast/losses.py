@@ -19,6 +19,9 @@ from graphcast import xarray_tree
 import numpy as np
 from typing_extensions import Protocol
 import xarray
+import jax
+import jax.numpy as jnp
+
 
 
 LossAndDiagnostics = tuple[xarray.DataArray, xarray.Dataset]
@@ -64,9 +67,64 @@ def weighted_mse_per_level(
     loss *= normalized_latitude_weights(target).astype(loss.dtype)
     if 'level' in target.dims:
       loss *= normalized_level_weights(target).astype(loss.dtype)
-    return _mean_preserving_batch(loss)
+    # print(type(loss))
+
+    latmin = 8
+    latmax = 37
+    lonmin = 68
+    lonmax = 97
+
+    lat_mask = (loss.coords['lat'] >= latmin) & (loss.coords['lat'] <= latmax)
+    lon_mask = (loss.coords['lon'] >= lonmin) & (loss.coords['lon'] <= lonmax)
+
+    # Combine latitude and longitude masks
+    combined_mask = lat_mask & lon_mask
+
+    # Apply the mask to all data variables in the dataset
+    masked_dataset = loss.where(combined_mask, other=0)
+
+
+    # can zero out or make the losses very small everywhere else
+
+    # print(f"Mean for whole dataset: {loss.mean()}")
+    # print(f"Mean for masked dataset: {masked_dataset.mean()}")
+
+    return _mean_preserving_batch(masked_dataset)
+    # return _mean_preserving_batch(loss)
+  
+    # return loss
+  
+
+  # loss = (predictions - targets)**2
+  # loss *= normalized_latitude_weights(targets).astype(loss.dtype)
+  # if 'level' in targets.dims:
+  #   loss *= normalized_level_weights(targets).astype(loss.dtype)
+  # print(type(loss))
+  # print(f'\n ======= Before map structure and before mean preserving: {loss}')
+  # print(f'\n ======= Before map structure and before mean preserving VALUES: {loss.values}')
+  # loss.to_netcdf("../local_files/loss_before_mean_preserving.nc")
+
 
   losses = xarray_tree.map_structure(loss, predictions, targets)
+  # other_losses = xarray_tree.map_structure(loss, predictions, targets)[1]
+#   print(type(losses))
+#   print('Weighted MSE losses:', losses)
+#   print('Weighted MSE losses VALUES:', losses.values)
+
+#   losses_float32 = losses.map(lambda x: x.astype(jnp.float32) if x.dtype == jnp.bfloat16 else x)
+
+# #   def convert_to_numpy(dataset: xarray.Dataset) -> xarray.Dataset:
+# #     return dataset.map(lambda x: jax.device_get(x) if isinstance(x, jax.Array) else x)
+
+# # # Before saving
+# #   losses_float32_numpy = convert_to_numpy(losses_float32)
+#   concrete_losses = jax.device_get(losses_float32)
+
+#   concrete_losses.to_netcdf("../local_files/loss_before_mean_preserving.nc")
+
+  # print(f"Sum per var for losses: {sum_per_variable_losses(losses, per_variable_weights)}")
+  # print(f"Sum per var for other losses: {sum_per_variable_losses(other_losses, per_variable_weights)}")
+
   return sum_per_variable_losses(losses, per_variable_weights)
 
 

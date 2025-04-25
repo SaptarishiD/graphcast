@@ -39,7 +39,7 @@ def dump(dest: BinaryIO, value: Any) -> None:
   dest.write(buffer.getvalue())
 
 
-def load(source: BinaryIO, typ: type[_T]) -> _T:
+def load(source: BinaryIO, typ: type[_T], allow_pickle = False) -> _T:
   """Load from a file object and convert it to the specified type.
 
   Args:
@@ -51,7 +51,7 @@ def load(source: BinaryIO, typ: type[_T]) -> _T:
   Returns:
     the deserialized value as the specified type.
   """
-  return _convert_types(typ, _unflatten(np.load(source)))
+  return _convert_types(typ, _unflatten(np.load(source, allow_pickle=allow_pickle)))
 
 
 _SEP = ":"

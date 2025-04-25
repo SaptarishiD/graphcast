@@ -1,44 +1,29 @@
-# <finetuning_cleaned.py>
-
-import os
-import sys
-
+#<run_graphcast_train_one_step.py>
 import logging
-
-# graphcast is in the parent directory so insert it into the path
-sys.path.append(os.path.abspath(os.path.join(os.getcwd(), '..')))
-
 import argparse
+import os
+os.environ['XLA_PYTHON_CLIENT_MEM_FRACTION'] = '2.0'
 import dataclasses
 import xarray as xr
 import numpy as np
 import pandas as pd
-from datetime import datetime
-from tqdm import tqdm
-
 import jax
 import optax
-
-from graphcast import checkpoint, data_utils, rollout, graphcast, normalization
 import save_params_utils
 import setup_jax_functions
+from graphcast import checkpoint, data_utils, rollout, graphcast
+from datetime import datetime
+
 from plotting import scale, select, plot_data, save_animation, save_static_plot
+
 from metrics import compute_rmse, compute_mae, compute_bias, compute_acc
-import matplotlib.pyplot as plt
-import pynvml
-import time
+
+
+jax.config.update('jax_disable_jit', True)
 
 current_date = datetime.now().strftime("%Y-%m-%d_%H-%M")
 
 
-
-
-# jax.config.update('jax_disable_jit', True)
-
-# for memory efficiency
-os.environ['XLA_PYTHON_CLIENT_PREALLOCATE']='false'
-os.environ['XLA_PYTHON_CLIENT_MEM_FRACTION'] = '2.0' 
-os.environ["XLA_PYTHON_CLIENT_ALLOCATOR"]="platform"
 
 mean_by_level = None
 stddev_by_level = None
@@ -47,6 +32,11 @@ model_config = None
 task_config = None
 params = None
 state = None
+
+
+# def diff_predictions(new_predictions: xr.Dataset, old_predictions: xr:Dataset):
+
+
 
 def generate_sample_era5_dataset(
     date='2022-01-01', 
@@ -111,159 +101,6 @@ def generate_sample_era5_dataset(
     return ds
 
 
-# modify the gradients function signature (needed for finetuning with optax)
-def grads_fn(params, state, inputs, targets, forcings, model_config, task_config):
-    def _aux(params, state, i, t, f):
-        (loss, diagnostics), next_state = setup_jax_functions.loss_fn.apply(params, state, jax.random.PRNGKey(0), model_config, task_config, i, t, f)
-        return loss, (diagnostics, next_state)
-    (loss, (diagnostics, next_state)), grads = jax.value_and_grad(_aux, has_aux=True)(params, state, inputs, targets, forcings)
-    return loss, diagnostics, next_state, grads
-
-def finetuning(train_inputs,train_targets,train_forcings,params):
-    lr = 1e-4
-    optimiser = optax.adam(lr, b1=0.9, b2=0.999, eps=1e-8)
-    opt_state = optimiser.init(params)
-
-    grads_fn_jitted = jax.jit(setup_jax_functions.with_configs(setup_jax_functions.grads_fn))
-    
-    print("Setting up grads function")
-    
-    state = {}
-    loss, diagnostics, next_state, grads = grads_fn_jitted(params, state, train_inputs, train_targets, train_forcings)
-
-    logger = logging.getLogger()
-
-    print("Losses calculated, now updating")
-
-    updates, opt_state = optimiser.update(grads, opt_state)
-
-    print("Applying updates")
-
-    params = optax.apply_updates(params, updates)
-
-    return params, loss
-
-
-def create_input_data(example_batch_, task_config_dict, index=0, lookahead=4):
-
-    minibatch = example_batch_.isel(time=slice(index, index + lookahead))
-
-    train_inputs, train_targets, train_forcings = data_utils.extract_inputs_targets_forcings(minibatch, target_lead_times=slice('6h', f'{12}h'), **task_config_dict)
-    return train_inputs, train_targets, train_forcings
-
-
-def daily_mean(data, input_data=False):
-    return data.mean('time', keepdims=True)
-
-def combinedata(first,second):
-    return first.merge(second)
-
-
-def train_graphcast(data, params, task_config_dict, epochs=10):
-
-    device = jax.devices()[0]
-
-    log_file = f"training_logs_{current_date}.log"
-    logging.basicConfig(filename=log_file, level=logging.INFO, format="%(asctime)s - %(message)s")
-    logger = logging.getLogger()
-
-    logger.info(f"JAX is running on: {device}")
-    pynvml.nvmlInit()
-    handle = pynvml.nvmlDeviceGetHandleByIndex(0)
-
-    gpu_utilization = []
-    gpu_memory = []
-
-
-    params_path = os.path.join('/home/saptarishi.dhanuka_asp25/weather/graphcast_dir/graphcast/local_files/params', f'params_finetune_test{current_date}.npz')
-
-    loss_tracker = []
-    lookahead = 5
-
-    epoch_batch_loss = []
-
-    for epoch in tqdm(range(epochs), desc="Training Epochs"):
-        logger.info(f"Epoch number {epoch}")
-
-        util = pynvml.nvmlDeviceGetUtilizationRates(handle)
-        mem = pynvml.nvmlDeviceGetMemoryInfo(handle)
-        
-        gpu_utilization.append(util.gpu)           # in percent era5_temp_ppt2022_wb_1.0_regrid_all_vars.zarr
-        gpu_memory.append(mem.used / 1024**2)      # in MB
-
-        print(gpu_utilization)
-        print(gpu_memory)
-        
-        time.sleep(1)
-
-        for i in tqdm(range(data.dims.mapping['time']-3), desc="Training Batches"):
-            logger.info(f"Time Batch number: {i}")
-            
-            # batches
-            train_inputs, train_targets, train_forcings = create_input_data(data, task_config_dict=task_config_dict, index=i, lookahead = lookahead + 1)
-            # combined_data = combiningData(train_targets, train_forcings)
-
-            # train_inputs_mean_1_day = daily_mean(train_inputs)
-            # train_targets_mean_1_day = daily_mean(train_targets)
-            # train_forcings_mean_1_day = daily_mean(train_forcings)
-
-            train_inputs_mean_1_day = train_inputs
-            train_targets_mean_1_day = train_targets
-            train_forcings_mean_1_day = train_forcings
-
-            print("Train Inputs:  ", train_inputs_mean_1_day.sizes.mapping)
-            print("Train Targets: ", train_targets_mean_1_day.sizes.mapping)
-            print("Train Forcings:", train_forcings_mean_1_day.sizes.mapping)
-
-            params, loss = finetuning(train_inputs_mean_1_day,train_targets_mean_1_day,train_forcings_mean_1_day, params)
-            logger.info(f'\n =========== Loss for time batch number: {i} = {loss} =========== \n')
-            print(f'\n =========== Loss for time batch number: {i} = {loss} =========== \n')
-            loss_tracker.append(loss)
-            epoch_batch_loss.append((epoch, i, loss)) 
-            if i % 20 == 0 and i > 0:
-                save_params_utils.save_model_params(params, f'{params_path}_{i}')
-
-        logger.info(f'\n =========== Saving model after epoch {epoch} =========== \n')
-        save_params_utils.save_model_params(params, params_path)
-
-    pynvml.nvmlShutdown()
-    plot_loss(epoch_batch_loss, current_date)
-    plot_gpu_util(gpu_utilization, gpu_memory, current_date)
-
-def plot_loss(epoch_batch_loss, date):
-    """
-    Plots the loss with epoch and batch number.
-    """
-    epochs = [entry[0] for entry in epoch_batch_loss]
-    batches = [entry[1] for entry in epoch_batch_loss]
-    losses = [entry[2] for entry in epoch_batch_loss]
-
-    plt.figure(figsize=(10, 6))
-    plt.plot(range(len(losses)), losses, label="Loss")
-    plt.xlabel("Epoch and Batch Number (Combined Index)")
-    plt.ylabel("Loss")
-    plt.title("Loss vs Epoch and Batch Number")
-    plt.legend()
-    plt.grid(True)
-    plt.savefig(f"plots/training/loss_plot{date}.png")
-
-def plot_gpu_util(gpu_utilization, gpu_memory, date):
-    plt.figure(figsize=(10, 4))
-    plt.subplot(1, 2, 1)
-    plt.plot(gpu_utilization, label='GPU Utilization (%)')
-    plt.xlabel('Epoch')
-    plt.ylabel('Utilization')
-    plt.legend()
-
-    plt.subplot(1, 2, 2)
-    plt.plot(gpu_memory, label='GPU Memory (MB)', color='orange')
-    plt.xlabel('Epoch')
-    plt.ylabel('Memory Usage')
-    plt.legend()
-
-    plt.tight_layout()
-    plt.savefig(f"plots/training/gpu_utilization_memory_plot{date}.png")
-
 
 
 def main():
@@ -281,7 +118,9 @@ def main():
     global params
     global state
 
-    log_file = f"loggers/printing_logs{current_date}.log"
+    current_date = datetime.now().strftime("%Y-%m-%d_%H-%M")
+
+    log_file = f"printing_logs{current_date}.log"
     logging.basicConfig(filename=log_file, level=logging.INFO, format="%(asctime)s - %(message)s")
     logger = logging.getLogger()
     logger.info("Starting the script")
@@ -304,10 +143,9 @@ def main():
 
     else:
         filename = '/Datastorage/saptarishi.dhanuka_asp25/gc_weights/graphcast_1_13.npz'
-        
         dataset_name = "/Datastorage/saptarishi.dhanuka_asp25/era5_data/arco_era5_1.0_formatted.nc"
 
-        arco = xr.open_zarr("/Datastorage/divij.khaitan_asp25/era5/era5_2020.zarr")
+        arco = xr.open_zarr("/Datastorage/divij.khaitan_asp25/arco_era5.zarr")
         old_lats = arco['latitude'].values
         old_lons = arco['longitude'].values
         new_lats = np.arange(-90.0, 90.0 + 1e-8, 1.0)
@@ -383,33 +221,27 @@ def main():
 
         logger.info(arco1.nbytes)
 
-        select_time = arco1.isel(time=slice(0, 60))
+        select_time = arco1.isel(time=slice(120, 132))
         tik = datetime.now()
 
-        training_trial_batch = select_time.load()
+        eval_batch = select_time.load()
 
         tok = datetime.now()
         # training_trial_batch = training_trial_batch.rename({'time': 'datetime'})
-        logger.info("Training batch time")
-        logger.info(training_trial_batch.coords)
+        logger.info("Eval batch time")
+        logger.info(eval_batch.coords)
         logger.info(f"Dataset loaded in {tok - tik}")
 
-        # with open("/Datastorage/saptarishi.dhanuka_asp25/era5_data/dataset_source-era5_date-2022-01-01_res-1.0_levels-13_steps-40.nc", 'rb') as f:
-        #     print("Loading Dataset")
-        #     tik = datetime.now()
-        #     training_trial_batch = xr.load_dataset(f).compute()
-        #     # training_trial_batch = training_trial_batch.isel(time=slice(0, 12))
-        #     # training_trial_batch = training_trial_batch.rename({'time': 'datetime'})
-        #     print("Training batch time")
-        #     print(training_trial_batch.datetime)
-        #     tok = datetime.now()
-        #     print(f"Dataset loaded in {tok - tik}")
     
     
     with open(filename, 'rb') as f:
       ckpt = checkpoint.load(f, graphcast.CheckPoint)
 
     params = ckpt.params
+
+    new_params = save_params_utils.load_model_params("/home/saptarishi.dhanuka_asp25/weather/graphcast_dir/graphcast/local_files/params/params_finetune_test2025-04-14_03-05.npz")
+
+    params = new_params
 
 
     with open('/Datastorage/saptarishi.dhanuka_asp25/gc_norms/diffs_stddev_by_level.nc', 'rb') as f:
@@ -434,7 +266,7 @@ def main():
     setup_jax_functions.configs['mean_by_level'] = mean_by_level
 
     setup_jax_functions.update_configs({
-        'params': ckpt.params,
+        'params': params,
         'state': {},
         'model_config': ckpt.model_config,
         'task_config': ckpt.task_config,
@@ -463,23 +295,30 @@ def main():
 
     # training_trial_batch = generate_sample_era5_dataset(model_config=model_config, task_config=task_config, time_steps = 10)
 
-    assert training_trial_batch.sizes["time"] >= 3
+    # assert training_trial_batch.sizes["time"] >= 3
 
-    logger.info(f"Training batch time dimensions: {training_trial_batch.sizes['time']}")
+    # logger.info(f"Training batch time dimensions: {training_trial_batch.sizes['time']}")
 
     task_config_dict =  dataclasses.asdict(task_config)
-    # task_config_dict.pop('input_duration')
 
-    logger.info("Starting training")
 
-    train_graphcast(training_trial_batch, params, task_config_dict, epochs=3)
 
-    logger.info("Finished training")
 
-    # can add evaluation and comparison code here after testing everything for a few timesteps
+    eval_inputs, eval_targets, eval_forcings = data_utils.extract_inputs_targets_forcings(
+    eval_batch, target_lead_times=slice("6h", f"{72}h"),
+    **dataclasses.asdict(task_config))
+
+    targets_template = eval_targets * np.nan
+    predictions_finetuned = run_model(new_params, state, eval_inputs, targets_template, eval_forcings)
+
+    print("saving predictions")
+    current_date = datetime.now().strftime("%Y-%m-%d_%H-%M")
+    predictions_finetuned.to_netcdf(f'./predictions_finetuned_{current_date}.nc')
+
+
+
+
 
 if __name__=="__main__":
   main()
 
-
-# </finetuning_cleaned.py>

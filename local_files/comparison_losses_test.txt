@@ -1,0 +1,15 @@
+ =========== Loss for time batch number: 0 = 1.138671875 =========== 
+ =========== Loss for time batch number: 1 = 19.03125 =========== 
+ =========== Loss for time batch number: 2 = 15.0 =========== 
+ =========== Loss for time batch number: 3 = 7.1875 =========== 
+ =========== Loss for time batch number: 4 = 9.015625 =========== 
+
+
+
+
+
+  =========== Loss for time batch number: 0 = 0.01617431640625 
+ =========== Loss for time batch number: 1 = 1.1796875 =========== 
+ =========== Loss for time batch number: 2 = 0.5634765625 =========== 
+ =========== Loss for time batch number: 3 = 0.2587890625 =========== 
+ =========== Loss for time batch number: 4 = 0.1875 =========== 
