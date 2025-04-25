@@ -16,6 +16,9 @@ imerg_data/
 local_files/netcdf_files
 local_files/params
 local_files/expts
+local_files/loggers
+local_files/*.nc
+local_files/*.grib
 # C extensions
 *.so
 
