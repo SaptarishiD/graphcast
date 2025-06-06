@@ -6,7 +6,7 @@ import numpy as np
 
 obs_path_new = "gs://weatherbench2/datasets/era5/1959-2023_01_10-wb13-6h-1440x721_with_derived_variables.zarr"
 full_obs = xr.open_zarr(obs_path_new)
-full_obs2022 = full_obs.sel(time=slice('2016-01-01', '2016-01-31'))
+full_obs2022 = full_obs.sel(time=slice('2015-06-01', '2015-09-30'))
 print(full_obs2022.nbytes)
 selected_our_vars = ['2m_temperature','total_precipitation_6hr']
 
@@ -46,11 +46,14 @@ longitude_new = np.arange(longitude_min, longitude_max + 1.0, 1.0)
 # xarray.interp performs 1-D interpolatitudeion alongitudeg the specified coordinates.
 full_obs2022_gc_input_vars_interp = full_obs2022_gc_input_vars.interp(latitude=latitude_new, longitude=longitude_new)
 
+
+print(full_obs2022_gc_input_vars_interp.nbytes)
+
 print("Interpolated to 1.0 degree grid")
 
 print("Saving to disk...")
 tik = time.time()
-full_obs2022_gc_input_vars_interp.to_zarr("/Datastorage/saptarishi.dhanuka_asp25/era5_data/wb_era5_jan2016_temp_ppt.zarr")
+full_obs2022_gc_input_vars_interp.to_zarr("/Datastorage/saptarishi.dhanuka_asp25/era5_data/wb_era5_jun_sept_2015_temp_ppt.zarr")
 tok = time.time()
 print("Time taken to save to disk: ", tok - tik)
 print("Done!")

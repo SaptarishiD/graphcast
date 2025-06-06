@@ -1,0 +1,8 @@
+name: xe_env
+channels:
+  - conda-forge
+dependencies:
+  - esmf
+  - esmpy
+  - pip:
+    - git+https://github.com/pangeo-data/xESMF.git
