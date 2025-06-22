@@ -2,6 +2,39 @@ import jax
 import numpy as np
 import pandas as pd
 import xarray as xr
+import xesmf as xe
+
+def regrid_hres_fine_to_coarse(hres_grid, variable, coarse_resolution=1.0, ):
+    target_lats = np.arange(-90, 91, coarse_resolution)
+    target_lons = np.arange(0, 360, coarse_resolution)
+    target_grid = xr.Dataset({
+        'lat': (['lat'], target_lats),
+        'lon': (['lon'], target_lons),
+    })
+    
+    print(f"Regridding {variable} from high resolution to coarse resolution {coarse_resolution} degrees")
+
+    regridder = xe.Regridder(
+        hres_grid, 
+        target_grid, 
+        'nearest_s2d',
+        locstream_in=True # important for unstructured data as we got with hres
+    )
+
+    print(f"Regridder built")
+
+    regridded_ds = regridder(hres_grid[variable], keep_attrs=True)
+
+    return regridded_ds
+
+    
+
+
+
+
+
+
+
 
 
 def generate_sample_era5_dataset(
