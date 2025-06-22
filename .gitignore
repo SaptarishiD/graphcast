@@ -184,3 +184,4 @@ cython_debug/
 *.png
 *.pny
 _version.py
+local_files/download_code/rainfall_difference_animation.html

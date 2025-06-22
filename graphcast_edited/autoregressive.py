@@ -17,6 +17,7 @@
 from typing import Optional, cast
 
 from absl import logging
+from graphcast import graphcast
 from graphcast import predictor_base
 from graphcast import xarray_jax
 from graphcast import xarray_tree
@@ -24,6 +25,34 @@ import haiku as hk
 import jax
 import xarray
 
+
+
+
+def create_india_mask(dataset: xarray.Dataset) -> xarray.DataArray:
+    """Creates a boolean mask for the Indian subcontinent.
+    
+    Args:
+        dataset: Input dataset containing lat/lon coordinates
+        
+    Returns:
+        xarray.DataArray: Boolean mask where True indicates points within India
+    """
+    # Approximate geographical boundaries of India
+    INDIA_BOUNDS = {
+        'lat': (8.4, 37.6),  # Latitude bounds
+        'lon': (68.7, 97.25)  # Longitude bounds
+    }
+    
+    lat = dataset.coords['lat']
+    lon = dataset.coords['lon']
+    
+    # Create boolean mask for Indian region
+    mask = ((lat >= INDIA_BOUNDS['lat'][0]) & 
+            (lat <= INDIA_BOUNDS['lat'][1]) & 
+            (lon >= INDIA_BOUNDS['lon'][0]) & 
+            (lon <= INDIA_BOUNDS['lon'][1]))
+    
+    return mask
 
 def _unflatten_and_expand_time(flat_variables, tree_def, time_coords):
   variables = jax.tree_util.tree_unflatten(tree_def, flat_variables)
@@ -228,12 +257,21 @@ class Predictor(predictor_base.Predictor):
            **kwargs
            ) -> predictor_base.LossAndDiagnostics:
     """The mean of the per-timestep losses of the underlying predictor."""
+    # jax.debug.print("In loss() of autoregressive.py")
     if targets.sizes['time'] == 1:
       # If there is only a single target timestep then we don't need any
       # autoregressive feedback and can delegate the loss directly to the
       # underlying single-step predictor. This means the underlying predictor
       # doesn't need to implement .loss_and_predictions.
-      return self._predictor.loss(inputs, targets, forcings, **kwargs)
+      # print(f'\n\nOnly one timestep\n\n')
+      result = self._predictor.loss(inputs, targets, forcings, **kwargs)
+      # print(f"Result 0 in only one timestep: {type(result[0])}")
+      # print(f"Result 1 in only one timestep: {type(result[1])}")
+
+      # result[0].to_netcdf("./one_timestep_result0.nc")
+      # result[1].to_netcdf("./one_timestep_result1.nc")
+      print(f"Saved Files")
+      return result
 
     constant_inputs = self._get_and_validate_constant_inputs(
         inputs, targets, forcings)
@@ -242,11 +280,12 @@ class Predictor(predictor_base.Predictor):
     inputs = inputs.drop_vars(constant_inputs.keys())
 
     if self._noise_level:
+
       def add_noise(x):
         return x + self._noise_level * jax.random.normal(
             hk.next_rng_key(), shape=x.shape)
       # Add noise to time-dependent variables of the inputs.
-      inputs = jax.tree.map(add_noise, inputs)
+      inputs = jax.tree_map(add_noise, inputs)
 
     # The per-timestep targets passed by scan to one_step_loss below will have
     # no leading time axis. We need a treedef without the time axis to use
@@ -259,6 +298,7 @@ class Predictor(predictor_base.Predictor):
         _get_flat_arrays_and_single_timestep_treedef(forcings))
     scan_variables = (flat_targets, flat_forcings)
 
+
     def one_step_loss(inputs, scan_variables):
       flat_target, flat_forcings = scan_variables
       forcings = _unflatten_and_expand_time(flat_forcings, forcings_treedef,
@@ -270,7 +310,7 @@ class Predictor(predictor_base.Predictor):
       # Add constant inputs:
       all_inputs = xarray.merge([constant_inputs, inputs])
 
-      (loss, diagnostics), predictions = self._predictor.loss_and_predictions(
+      (loss, diagnostics), predictions =  self._predictor.loss_and_predictions(
           all_inputs,
           target,
           forcings=forcings,
@@ -287,9 +327,9 @@ class Predictor(predictor_base.Predictor):
       return next_inputs, (loss, diagnostics)
 
     if self._gradient_checkpointing:
-      scan_length = targets.dims['time']
+      scan_length = targets.sizes['time']
       if scan_length <= 1:
-        logging.warning(  
+        logging.warning(
             'Skipping gradient checkpointing for sequence length of 1')
       else:
         one_step_loss = hk.remat(one_step_loss)
@@ -308,17 +348,10 @@ class Predictor(predictor_base.Predictor):
         lambda x: xarray_jax.DataArray(x, dims=('time', 'batch')).mean(  # pylint: disable=g-long-lambda
             'time', skipna=False),
         (per_timestep_losses, per_timestep_diagnostics))
+
+
     
-    # print("Here we are printing the loss and diagnostics in autoregressive.py")
-    # print(type(loss))
-    # print(loss)
-
-    # print("Here we are printing the unwrapped loss and diagnostics in autoregressive.py")
-
-    # unwrap = xarray_tree.map_structure(
-    #   lambda x: xarray_jax.unwrap_data(x.mean(), require_jax=True),
-    #   (loss, diagnostics))
-    # print(unwrap)
-
+    # print(f"\n\n Loss in autoregressive.py: {loss.data}\n")
+    # print(f"\n Diag in autoregressive.py: {per_timestep_diagnostics}\n")
 
     return loss, diagnostics
