@@ -26,12 +26,10 @@ def _parse_model_rename(s: str | None):
 # --- fuzzy color mapping (subword, case-insensitive) ---
 def _get_color(label: str) -> str:
     low = label.lower()
-    if "finetuned2" in low or "finetuned_2" in low or "finetuned-2" in low:
+    if "finetuned" in low or "finetuned_3" in low or "finetuned-3" in low:
         return "tab:green"
-    if "finetuned1" in low or "finetuned_1" in low or "finetuned-1" in low:
-        return "tab:orange"
     if "base" in low:
-        return "tab:blue"
+        return "tab:red"
     return "black"
 
 
@@ -149,7 +147,7 @@ def plot_from_summary(
         precip_df = precip_df.sort_values("lead_time_hours")
 
     # 3) Plot
-    plt.style.use("seaborn-v0_8-whitegrid")
+    plt.style.use("seaborn-v0_8-white")
     fig, ax_left = plt.subplots(figsize=(16, 8))
 
     # Right axis for precipitation
@@ -157,11 +155,8 @@ def plot_from_summary(
 
     # Compute display names and plot
     group_cols = ["model", "region"] if has_region else ["model"]
-    legend_items = []
 
-    # Optional: bring baseline to front/back; here we draw baseline first to appear first in legend
     def _group_sort_key(gk):
-        # gk is tuple if has_region else str
         model_name = gk if isinstance(gk, str) else gk[0]
         if baseline_model and model_name == baseline_model:
             return (0, model_name)
@@ -170,8 +165,12 @@ def plot_from_summary(
     for group_keys, gdf in sorted(summary_df.groupby(group_cols), key=_group_sort_key):
         model_name = group_keys if isinstance(group_keys, str) else group_keys[0]
         region = None if isinstance(group_keys, str) else group_keys[1]
+        print(f"\nPlotting model: {model_name}, region: {region}")
 
         display_name = model_rename.get(model_name, model_name) if model_rename else model_name
+        print(f"  Display name: {display_name}")
+        if 'finetuned' in display_name.lower():
+            display_name = 'Finetuned'
         label = display_name if region is None else f"{display_name} ({region})"
 
         color = _get_color(label)
@@ -179,7 +178,6 @@ def plot_from_summary(
         ax_left.plot(
             gdf["lead_time_hours"],
             gdf["mse_mean"],
-            marker="o",
             linestyle="-",
             linewidth=2,
             color=color,
@@ -192,7 +190,7 @@ def plot_from_summary(
             gdf["lead_time_hours"],
             lower,
             upper,
-            alpha=0.12,
+            alpha=0.05,
             color=color,
         )
 
@@ -204,19 +202,28 @@ def plot_from_summary(
             linestyle="-",
             linewidth=3,
             alpha=0.25,
-            color="red",
+            color="gray",
             label="Ground Truth Total Precipitation",
         )
 
     # Labels and ticks
-    ax_left.set_title("Forecast Skill (MSE) vs Lead Time", fontsize=25, pad=18)
-    ax_left.set_xlabel("Lead Time (hours)", fontsize=16)
-    ax_left.set_ylabel("Average MSE (lower is better)", fontsize=16)
+    ax_left.set_title("Forecast Skill (RMSE) vs Lead Time", fontsize=28, pad=20)
+    ax_left.set_xlabel("Lead Time (hours)", fontsize=20)
+    ax_left.set_ylabel("Average RMSE (lower is better)", fontsize=20)
     ax_left.ticklabel_format(style="sci", axis="y", scilimits=(0, 0))
-    ax_left.grid(True, which="both", linestyle="--", linewidth=0.5)
 
+    # Make y-axis "larger" so plots appear smaller
+    ymin, ymax = ax_left.get_ylim()
+    ax_left.set_ylim(ymin, ymax * 1.5)
+
+    # Remove grid
+    ax_left.grid(True, which='both', linestyle='--', alpha=0.1)
+
+    # Tick font sizes
+    ax_left.tick_params(axis="both", labelsize=16)
     if ax_right is not None:
-        ax_right.set_ylabel("Total Precipitation", fontsize=16)
+        ax_right.set_ylabel("Total Precipitation (m)", fontsize=20)
+        ax_right.tick_params(axis="both", labelsize=16)
 
     # X ticks every 24h
     max_hours = float(summary_df["lead_time_hours"].max()) if not summary_df.empty else 168.0
@@ -232,7 +239,7 @@ def plot_from_summary(
     else:
         lines, labels = lines_left, labels_left
 
-    ax_left.legend(lines, labels, loc="upper left", fontsize=12)
+    ax_left.legend(lines, labels, loc="upper left", fontsize=18)
 
     # Write file
     os.makedirs(os.path.dirname(output_path) or ".", exist_ok=True)
@@ -270,7 +277,7 @@ def main():
         model_rename=model_rename,
         baseline_model=args.baseline_model,
         k_factor=args.k_factor,
-    )
+    )   
 
 
 if __name__ == "__main__":
