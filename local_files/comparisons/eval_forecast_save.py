@@ -1,12 +1,12 @@
-# <eval_forecast.py>
+# <eval_forecast_save.py>
 """
-python /home/saptarishi.dhanuka_asp25/weather/graphcast_dir/graphcast/local_files/eval_forecast.py \ 
---eval_start "2024-08-01" \ 
---eval_end "2024-09-15" \ 
+python /home/saptarishi.dhanuka_asp25/weather/graphcast_dir/graphcast/local_files/eval_forecast_save.py \ 
+--eval_start "2014-08-01" \ 
+--eval_end "2014-09-30" \ 
 --eval_dataset_choice "imerg" \ 
 --vars_to_eval "total_precipitation_6hr" \ 
---params_path_new1 "/Datastorage/saptarishi.dhanuka_asp25/gc_weights/graphcast_1_13_orig_2024-06-01_2024-09-15_FORECAST28.npz" \ 
---params_path_new2 "/Datastorage/saptarishi.dhanuka_asp25/gc_weights/graphcast_1_13_orig_2024-06-01_2024-07-30_FORECAST28.npz" \
+--params_path_new1 "/Datastorage/saptarishi.dhanuka_asp25/gc_weights/graphcast_1_13_orig_2014-06-01_2014-07-30_FORECAST28_dynamic_weighing_india_mask_expt5.npz" \ 
+--params_path_new2 "/Datastorage/saptarishi.dhanuka_asp25/gc_weights/graphcast_1_13_orig_2014-06-01_2014-07-30_FORECAST28_dynamic_weighing_india_mask_expt3.npz" \
 --output_csv_path "./evaluation_results/forecast_mse.csv"
 """
 
@@ -15,8 +15,8 @@ Complete evaluation of forecast against different datasets
 """
 # <eval_forecast.py>
 # Parameters
-eval_start = "2024-08-01"
-eval_end = "2024-09-05"
+eval_start = "2014-08-01"
+eval_end = "2014-09-05"
 dataset_choice = "imerg"
 eval_vars = "total_precipitation_6hr"
 apath = "/Datastorage/saptarishi.dhanuka_asp25/era5_data/era5_cache/"
@@ -32,6 +32,7 @@ output_pred_old_dir = '/Datastorage/saptarishi.dhanuka_asp25/preds_dir/'
 output_pred_finetuned_dir = '/Datastorage/saptarishi.dhanuka_asp25/preds_dir/'
 region_vise = True
 regions = ['Central_Northeast', 'Hilly_Regions', 'Northeast', 'Northwest', 'South_Peninsular', 'West_Central']
+world_regions = ['India']
 
 """
 Complete evaluation of forecast against different datasets with rainfall analysis
@@ -59,7 +60,7 @@ import optax
 
 
 # os.environ['XLA_PYTHON_CLIENT_PREALLOCATE'] = 'false'
-# os.environ['XLA_PYTHON_CLIENT_MEM_FRACTION'] = '2.0' 
+os.environ['XLA_PYTHON_CLIENT_MEM_FRACTION'] = '0.70'
 # os.environ["XLA_PYTHON_CLIENT_ALLOCATOR"] = "platform"
 
 sys.path.append(os.path.abspath(os.path.join(os.getcwd(), '..')))
@@ -102,7 +103,7 @@ logging.info(f"Loading dataset '{dataset_choice}' from {eval_start} to {eval_end
 if dataset_choice == "imerg":
     apath = '/Datastorage/saptarishi.dhanuka_asp25/era5_data/era5_cache/'
     dbase,_ = trainer.dataloader.open_databases(apath,None)
-    dbase = construct_era5_imerg(dbase)
+    dbase = construct_era5_imerg(dbase, year=2014)
     # Load a slightly larger window to ensure we have the day before the start_date for initialization
     load_start_date = pd.to_datetime(eval_start) - pd.Timedelta(days=1)
     eval_time_ds = dbase.sel(time=slice(load_start_date.strftime('%Y-%m-%d'), eval_end))
@@ -110,6 +111,9 @@ if dataset_choice == "imerg":
 
 select_time_eval = process_to_graphcast_format(eval_time_ds)
 logging.info(f"Full data range loaded: {select_time_eval.time.values[0]} to {select_time_eval.time.values[-1]}")
+
+
+# os.environ['XLA_PYTHON_CLIENT_MEM_FRACTION'] = '0.08'
 
 logging.info("Loading models and normalization stats...")
 with open(params_path_old, 'rb') as f:
@@ -150,9 +154,6 @@ def run_model(params, state, inputs, targets_template, forcings):
         params=params,
         state=state
     )
-
-
-
 
 
 
@@ -247,9 +248,9 @@ for init_date in tqdm(initialization_dates, desc="Evaluating Forecasts"):
     predictions_ft2 = run_model(new_params2, state, eval_inputs, targets_template, eval_forcings)
     
     models_to_eval = {
-        'Graphcast_Base': predictions_base,
-        'Graphcast_Finetuned1': predictions_ft1,
-        'Graphcast_Finetuned2': predictions_ft2,
+        'Graphcast_Base' + eval_start + eval_end: predictions_base,
+        'Graphcast_Finetuned1' + params_path_new1: predictions_ft1,
+        'Graphcast_Finetuned2' + params_path_new2: predictions_ft2,
     }
 
     # 4. Load, regrid, and align HRES forecast for the same initialization date
@@ -268,52 +269,69 @@ for init_date in tqdm(initialization_dates, desc="Evaluating Forecasts"):
     else:
         logging.warning(f"No HRES file found for init date {init_date}")
 
-    
+        
 
-    # 5. Calculate MSE for each model and forecast horizon
-    for model_name, predictions in tqdm(models_to_eval.items(), desc="MSE Calc"):
+    for model_name, predictions in tqdm(models_to_eval.items(), desc="MSE & Diff Calc"):
         if eval_vars in predictions:
             pred_var = predictions[eval_vars]
         else:
             pred_var = predictions
-        # else:
-        #     logging.warning(f"'{eval_vars}' not found in predictions for model {model_name}. Skipping.")
-        #     continue
 
         times = pred_var.time.values
-            
-        for timestep in times:
-        # Slice predictions and targets to the current forecast horizon
-            pred_sliced = pred_var.sel(time=timestep)
-            targ_sliced = ground_truth_var.sel(time=timestep)
-            
-            # mse calculated at a particular timestep of the forecast horizon
 
-            if region_vise:
+        # *** CHANGE: loop over each region
+        for region in tqdm(world_regions, desc=f"World regions for {model_name}"):
+            for timestep in times:
+                # Slice predictions and targets to the current forecast horizon
+                pred_sliced = pred_var.sel(time=timestep)
+                targ_sliced = ground_truth_var.sel(time=timestep)
+
+                # Compute difference for this region
                 diff = pred_sliced - targ_sliced
-                diff = mask_dbase_regions(diff, region_name=regions[0])
+                # *** CHANGE: apply region mask per region name
+                diff_region = mask_dbase_india_buffer(diff)
 
+                # Compute MSE over the region
+                mse = float((diff_region**2).mean())
 
-            mse = float(((diff)**2).mean())
+                # Store MSE result
+                result_row = {
+                    'init_date': init_date.strftime('%Y-%m-%d %H:%M:%S'),
+                    'forecast_horizon': str(timestep),
+                    'model': model_name,
+                    'region': region,                         # *** CHANGE: include region
+                    'mse': mse
+                }
+                all_results.append(result_row)
 
+                # *** CHANGE: write MSE CSV per region
+                csv_filename = f'skill_score_{region}_{current_date}.csv'
+                pd.DataFrame([result_row]).to_csv(
+                    csv_filename,
+                    mode='a',
+                    header=not os.path.exists(csv_filename),
+                    index=False
+                )
 
-            # Store the result
-            result_row = {
-                'init_date': init_date.strftime('%Y-%m-%d %H:%M:%S'),
-                'forecast_horizon_times': timestep,
-                'model': model_name,
-                'mse': mse
-            }
-            all_results.append(result_row)
+                logging.debug(f"[{region}] {init_date}, {model_name}, {timestep} MSE = {mse:.6f}")
 
-            print("Writing to file")
-
-            pd.DataFrame([result_row]).to_csv(
-            f'skill_score_{regions[0]}_{current_date}.csv', mode='a',index=False
-            )
-
-
-            logging.debug(f"Result: {init_date}, {model_name}, {timestep}-day MSE = {mse:.6f}")
+                # *** CHANGE: also save the full diff xarray for later inspection
+                diff_ds = diff_region.to_dataset(name='difference')
+                # annotate coords or attrs so you know init/model/region in the file
+                diff_ds.attrs.update({
+                    'init_date': init_date.strftime('%Y-%m-%d %H:%M:%S'),
+                    'model': model_name,
+                    'region': region,
+                    'forecast_horizon': str(timestep)
+                })
+                nc_filename = (
+                    f'diff_{region}_{model_name}_'
+                    f"{init_date.strftime('%Y%m%d%H')}_t{timestep}.nc"
+                )
+                print("Diff filesize:")
+                print(diff_ds.nbytes)
+                diff_ds.to_netcdf(nc_filename)
+                logging.debug(f"Saved diff xarray to {nc_filename}")
 
 # 6. Save all results to a CSV file
 logging.info("Evaluation loop finished. Saving results to CSV.")
@@ -348,3 +366,5 @@ for i, hres_file in tqdm(enumerate(sorted_paths[5:11]), desc="Sims"):
     # It can be used for debugging or generating sample plots for a few specific dates.
     # ... (original loop code) ...
 """
+
+# </eval_forecast_save.py>
