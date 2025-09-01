@@ -30,6 +30,28 @@ HRES_VAR = "tp"                         # meters / 6h -> convert to mm
 OUT_CSV = "./rmse_by_init_and_lead_hres_base_fine201408onward.csv"
 OUT_PNG = "./plots/rmse_levels.png"
 
+
+LOCATIONS = {
+    # Country-wide bounding box
+    "india": {"lat_min": 6.0, "lat_max": 38.0, "lon_min": 65.0, "lon_max": 95.0},
+
+    # Major Indian cities (rounded to nearest integer degree ranges)
+    "mumbai":   {"lat_min": 18.0, "lat_max": 20.0, "lon_min": 72.0, "lon_max": 74.0},
+    "delhi":    {"lat_min": 28.0, "lat_max": 29.0, "lon_min": 76.0, "lon_max": 78.0},
+    "kolkata":  {"lat_min": 22.0, "lat_max": 23.0, "lon_min": 88.0, "lon_max": 89.0},
+    "chennai":  {"lat_min": 12.0, "lat_max": 13.0, "lon_min": 80.0, "lon_max": 81.0},
+    "bengaluru":{"lat_min": 12.0, "lat_max": 13.0, "lon_min": 77.0, "lon_max": 78.0},
+    "hyderabad":{"lat_min": 17.0, "lat_max": 18.0, "lon_min": 78.0, "lon_max": 79.0},
+    "ahmedabad":{"lat_min": 23.0, "lat_max": 24.0, "lon_min": 72.0, "lon_max": 73.0},
+    "pune":     {"lat_min": 18.0, "lat_max": 19.0, "lon_min": 73.0, "lon_max": 74.0},
+    "jaipur":   {"lat_min": 26.0, "lat_max": 27.0, "lon_min": 75.0, "lon_max": 76.0},
+    "lucknow":  {"lat_min": 26.0, "lat_max": 27.0, "lon_min": 80.0, "lon_max": 81.0},
+    "bhopal":   {"lat_min": 23.0, "lat_max": 24.0, "lon_min": 77.0, "lon_max": 78.0},
+    "guwahati": {"lat_min": 26.0, "lat_max": 27.0, "lon_min": 91.0, "lon_max": 92.0},
+    "srinagar": {"lat_min": 34.0, "lat_max": 35.0, "lon_min": 74.0, "lon_max": 75.0},
+    "thiruvananthapuram": {"lat_min": 8.0, "lat_max": 9.0, "lon_min": 76.0, "lon_max": 77.0},
+}
+
 # ----------------- utilities (HAC, selection, grids) -----------------
 
 def _autocorr(x, lag):
@@ -62,10 +84,36 @@ def inflation_factor_k(series, max_lag=2):
     return float(np.sqrt(max(k2, 1.0)))  # never deflate
 
 def _select_bbox(da, lat_min=LAT_MIN, lat_max=LAT_MAX, lon_min=LON_MIN, lon_max=LON_MAX):
+    """Select a lat/lon box, robust to coordinate direction (ascending/descending)."""
     lat = da["lat"]; lon = da["lon"]
-    lat_sel = lat.where((lat >= lat_min) & (lat <= lat_max), drop=True)
-    lon_sel = lon.where((lon >= lon_min) & (lon <= lon_max), drop=True)
-    return da.sel(lat=slice(lat_min, lat_max), lon=slice(lon_min, lon_max))
+
+    # Handle descending coordinates safely
+    lat_start, lat_end = (lat_max, lat_min) if lat[0] > lat[-1] else (lat_min, lat_max)
+    lon_start, lon_end = (lon_max, lon_min) if lon[0] > lon[-1] else (lon_min, lon_max)
+
+    return da.sel(lat=slice(lat_start, lat_end), lon=slice(lon_start, lon_end))
+
+
+def _select_region(da, region_name, locations=LOCATIONS):
+    """Select a named region from LOCATIONS."""
+    if region_name not in locations:
+        raise KeyError(f"Unknown region '{region_name}'. Available: {list(locations.keys())}")
+    bbox = locations[region_name]
+    return _select_bbox(da, **bbox)
+
+
+def _to_float_list(arr_like):
+    """Materialize possible Dask/xarray arrays to python floats (no .item(), works for vectors)."""
+    a = arr_like
+    if hasattr(a, "compute"):
+        try:
+            a = a.compute()
+        except Exception:
+            pass
+    a = np.asarray(a)
+    return [float(v) for v in a.ravel()]
+
+
 
 def create_regridder(src_da, dst_da):
     return xe.Regridder(src_da, dst_da, method="bilinear", reuse_weights=True)
@@ -615,7 +663,7 @@ def main():
     logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
 
     savepath = args.input_csv
-    if os.path.exists(savepath):
+    if savepath and os.path.exists(savepath):
         df = pd.read_csv(savepath)
         print("Reading existing")
     else:
