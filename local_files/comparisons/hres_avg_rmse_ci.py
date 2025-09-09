@@ -17,15 +17,15 @@ from scipy import stats
 LAT_MIN, LAT_MAX = 6, 38
 LON_MIN, LON_MAX = 65, 95
 
-ROLLED_DIR = "/Datastorage/saptarishi.dhanuka_asp25/rolled_out_preds"
-HRES_PATH = "/Datastorage/divij.khaitan_asp25/forecasts_2014/hres_forecasts_20140601_20140930.nc"
+ROLLED_DIR = "/Datastorage/saptarishi.dhanuka_asp25/rolled_out_preds/025res"
+HRES_PATH = "/Datastorage/divij.khaitan_asp25/forecasts_2025/correct_6hourly_hres_forecasts20250701_20250730.nc"
 
-TARGET_PREFIX = "target_init_"
-BASE_PREFIX = "base_init_"
-FINETUNED_PREFIX = "finetuned_init_"  # change if your finetuned prefix differs
+TARGET_PREFIX = "era_precip025_target_init_"
+BASE_PREFIX = "'base_precip025_init_"
+FINETUNED_PREFIX = "fine_precip025_init_"  # change if your finetuned prefix differs
 
 TARGET_VAR = "total_precipitation_6hr"  # (assumed) mm / 6h
-HRES_VAR = "tp"                         # meters / 6h -> convert to mm
+HRES_VAR = "tp_6h"                         # meters / 6h -> convert to mm
 
 OUT_CSV = "./rmse_by_init_and_lead_hres_base_fine201408onward.csv"
 OUT_PNG = "./plots/rmse_levels.png"
@@ -116,9 +116,19 @@ def _to_float_list(arr_like):
 
 
 def create_regridder(src_da, dst_da):
-    return xe.Regridder(src_da, dst_da, method="bilinear", reuse_weights=True)
+    if os.path.exists('./hres_era5_regridder025.nc') and abs(dst_da['lat'].values[0] - dst_da['lat'].values[1]) == 0.25:
+        print(f"Reusing weights for 0.25 resolution")
+        temp_regridder = xe.Regridder(src_da, dst_da, method="bilinear", reuse_weights=True, filename='./hres_era5_regridder025.nc')
+    else:
+        temp_regridder = xe.Regridder(src_da, dst_da, method="bilinear", reuse_weights=False)
+    if not os.path.exists('./hres_era5_regridder025.nc'):
+        temp_regridder.to_netcdf('./hres_era5_regridder025.nc')
+    return temp_regridder
 
-def regrid_each_step(da_step_lat_lon, regridder, step_dim="step"):
+def regrid_each_step(da_step_lat_lon, regridder, step_dim="step", savepath = None):
+    if os.path.exists(savepath):
+        print(f"Returning regridded hres with {savepath.split('/')[-1]} ")
+        return xr.open_dataset(savepath)
     out_list = []
     for i in range(da_step_lat_lon.sizes[step_dim]):
         out_i = regridder(da_step_lat_lon.isel({step_dim: i}))
@@ -126,10 +136,17 @@ def regrid_each_step(da_step_lat_lon, regridder, step_dim="step"):
     out = xr.concat(out_list, dim=step_dim)
     if step_dim in da_step_lat_lon.coords:
         out = out.assign_coords({step_dim: da_step_lat_lon[step_dim]})
+
+    if not os.path.exists(savepath):
+        out.to_netcdf(savepath)
+
     return out
 
 def _standardize_pred_da(ds, var=TARGET_VAR):
-    da = ds[var]
+    if var in ds.data_vars:
+        da = ds[var]
+    else:
+        da = ds
     if "batch" in da.dims:
         da = da.squeeze("batch", drop=True)
     if "time" in da.dims:
@@ -179,7 +196,8 @@ def compute_rmse_table(rolled_dir=ROLLED_DIR,
 
     rows = []
 
-    for date_str in tqdm(init_dates, desc="Processing init dates"):
+    for date_str in tqdm(init_dates[25:50], desc="Processing init dates"):
+        print(date_str)
         init_iso = f"{date_str}T00:00:00"
         init_dt64 = np.datetime64(init_iso)
 
@@ -193,11 +211,17 @@ def compute_rmse_table(rolled_dir=ROLLED_DIR,
 
         # HRES -> mm, drop step 0
         try:
-            hres_sel = hres_tp.sel(time=np.datetime64(init_iso)).isel(step=slice(1, None)) * 1000.0
+            if hres_tp.attrs.get('units') == 'm':
+                print("Units in metres already")
+                hres_sel = hres_tp.sel(time=np.datetime64(init_iso)).isel(step=slice(1, None))
+            else:
+                hres_sel = hres_tp.sel(time=np.datetime64(init_iso)).isel(step=slice(1, None)) * 1000.0
         except Exception as e:
             logging.warning(f"HRES selection failed for {date_str}: {e}")
             continue
-        hres_rg = regrid_each_step(hres_sel, regridder, step_dim="step")
+        print("Starting Regrid")
+        hres_rg = regrid_each_step(hres_sel, regridder, step_dim="step", savepath = '/Datastorage/saptarishi.dhanuka_asp25/hres_2025_regridded_07.nc')
+        print("Finished Regrid")
 
         # Align steps across GT & HRES; drop GT step 0 to match 6h,12h,...
         common_steps = min(hres_rg.sizes["step"], gt.sizes["step"] - 1)
@@ -346,7 +370,7 @@ def plot_rmse_levels(summary_df,
         ax1.fill_between(x, lo, hi, color=cmap[m], alpha=(0.12 if m == baseline_model else 0.16), linewidth=0)
 
     ax1.set_title(title, fontsize=20, pad=10)
-    ax1.set_ylabel("RMSE (mm / 6h)", fontsize=18)
+    ax1.set_ylabel("RMSE per 6 hours", fontsize=18)
     ax1.grid(True, axis="x", linestyle="--", linewidth=0.4, alpha=0.4)
     ax1.legend(title="", ncols=2, fontsize=21)
 
@@ -414,6 +438,7 @@ def compute_avg_target_precip_by_lead(
     Scans all 'target_init_YYYY-MM-DD 00:00:00.nc' with month >= min_month.
     """
     import glob
+    year = 2025
 
     all_targets = sorted(glob.glob(os.path.join(rolled_dir, f"{target_prefix}*.nc")))
     # print(all_targets)
@@ -429,7 +454,7 @@ def compute_avg_target_precip_by_lead(
             y, m, d = map(int, date_str.split("-"))
         except Exception:
             continue
-        if (m < min_month and y != 2014) or (y !=2014):
+        if (m < min_month and y != year) or (y !=year):
             # print(m, y)
             continue
 
@@ -459,7 +484,7 @@ def compute_avg_target_precip_by_lead(
         recs.append(df_i)
 
     if not recs:
-        raise RuntimeError("No eligible target files (month >= min_month) found.")
+        raise RuntimeError(f"No eligible target files (month >= min_month) found for year {year}")
 
     df_all = pd.concat(recs, ignore_index=True)
     # align leads (just in case of float drift)
@@ -498,7 +523,14 @@ def plot_rmse_levels_with_precip(
 
     ns_to_hours = lambda s: int(s.split()[0]) // (3600 * 1_000_000_000)
 
-    df_rmse[lead_col] = df_rmse[lead_col].apply(ns_to_hours)
+    if 'forecast_horizon_hours' in df_rmse.columns:
+        lead_col = 'forecast_horizon_hours'
+    
+    try:
+        df_rmse[lead_col] = df_rmse[lead_col].apply(ns_to_hours)
+    except AttributeError as ae:
+        pass
+
     # --- summarize RMSE with HAC-inflated CI ---
     rmse_summary = summarize_rmse_by_model(
         df_rmse,
@@ -534,7 +566,8 @@ def plot_rmse_levels_with_precip(
 
     # --- set up models to plot (keep same ordering style) ---
     all_models = list(rmse_summary["model"].unique())
-    models = all_models if models_to_plot is None else [m for m in models_to_plot if m in all_models]
+    models = all_models if models_to_plot is None else [m for m in models_to_plot]
+    print(models, all_models, models_to_plot)
     if baseline_model not in models:
         raise ValueError(f"Baseline model '{baseline_model}' not found in RMSE summary.")
     models = [baseline_model] + [m for m in models if m != baseline_model]
@@ -567,7 +600,7 @@ def plot_rmse_levels_with_precip(
         ax1.fill_between(x, lo, hi, color=cmap[m], alpha=(0.12 if m == baseline_model else 0.16), linewidth=0)
 
     ax1.set_title(title, fontsize=20, pad=10)
-    ax1.set_ylabel("RMSE (mm / 6h)", fontsize=18)
+    ax1.set_ylabel("RMSE", fontsize=18)
     ax1.grid(True, axis="x", linestyle="--", linewidth=0.4, alpha=0.4)
 
     if ymin is not None or ymax is not None:
@@ -647,7 +680,7 @@ def plot_rmse_levels_with_precip(
 
 def main():
 
-    OUT_PNG = "./plots/rmse_levels_precip.png"
+    OUT_PNG = "./plots/rmse_levels_precip6h.png"
     parser = argparse.ArgumentParser(description="Compute RMSE CSV and plot mean RMSE + % improvement with HAC CIs.")
     parser.add_argument("--input_csv", default=None)  # if provided, skip RMSE computation
     parser.add_argument("--rolled_dir", default=ROLLED_DIR)
@@ -684,6 +717,7 @@ def main():
         "finetuned": "tab:blue",
         "fine": "tab:blue",
         "fine_val": "tab:cyan",
+        "fine_6h": "tab:cyan",
     }
     models_rename = {
         "HRES": "HRES",
@@ -691,23 +725,24 @@ def main():
         "finetuned": "Finetuned",
         "fine": "Finetuned",
         "fine_val": "Finetuned-Val",
+        "fine_6h": "Finetuned-6h",
     }
 
     plot_path = args.out_png
     rmse_summary, precip_by_lead = plot_rmse_levels_with_precip(
         df_rmse,
         rolled_dir=ROLLED_DIR,
-        baseline_model="base",
-        models_to_plot=["base", "fine", "fine_val"],
+        baseline_model="Graphcast_Finetuned1",
+        models_to_plot=None,
         custom_colors=custom_colors,
         models_rename=models_rename,
         title="RMSE Comparison and % Improvement + Avg Precip",
         alpha=0.20,
         max_lag=0,
-        min_month_for_precip=8,
+        min_month_for_precip=7,
         savepath=plot_path,
         improvement_ylim=(None, 80),
-        ymin=None, ymax=None, lead_col='forecast_horizon'
+        ymin=None, ymax=None, lead_col='forecast_horizon_hours'
     )
 
 
