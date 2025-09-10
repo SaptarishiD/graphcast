@@ -4,6 +4,8 @@ import glob
 import logging
 import argparse
 from datetime import datetime
+from matplotlib.ticker import ScalarFormatter
+
 
 import numpy as np
 import pandas as pd
@@ -18,7 +20,7 @@ LAT_MIN, LAT_MAX = 6, 38
 LON_MIN, LON_MAX = 65, 95
 
 ROLLED_DIR = "/Datastorage/saptarishi.dhanuka_asp25/rolled_out_preds/025res"
-HRES_PATH = "/Datastorage/divij.khaitan_asp25/forecasts_2025/correct_6hourly_hres_forecasts20250701_20250730.nc"
+HRES_PATH = "/Datastorage/divij.khaitan_asp25/forecasts_2025/correct_6hourly_hres_forecasts20250701_20250831.nc"
 
 TARGET_PREFIX = "era_precip025_target_init_"
 BASE_PREFIX = "'base_precip025_init_"
@@ -250,11 +252,16 @@ def compute_rmse_table(rolled_dir=ROLLED_DIR,
         def rmse_over_india(pred_da, truth_da):
             pred_box = _select_bbox(pred_da)
             truth_box = _select_bbox(truth_da)
+            # pred_box = pred_da
+            # truth_box = truth_da
             diff = pred_box - truth_box
             return np.sqrt((diff ** 2).mean(dim=["lat", "lon"]))
 
         # HRES rows
         rmse_hres = rmse_over_india(hres_use, gt_use).values
+        print(rmse_hres.data_vars)
+        print(rmse_hres)
+        print(type(rmse_hres))
         for lh, val in zip(lead_hours, rmse_hres):
             rows.append({"model": "HRES", "init_date": date_str,
                          "forecast_horizon_hours": float(lh), "rmse": float(val)})
@@ -314,109 +321,6 @@ def summarize_rmse_by_model(df,
 
     return pd.DataFrame(rows).sort_values(["model", "lead"]).reset_index(drop=True)
 
-# ----------------- plotting (levels + % improvement) -----------------
-
-def plot_rmse_levels(summary_df,
-                     baseline_model,
-                     models_to_plot=None,
-                     custom_colors=None,
-                     title="RMSE Comparison and % Improvement",
-                     ymin=0, ymax=16,
-                     savepath=None,
-                     models_rename=None,
-                     improvement_ylim=(None, 70)):
-    """
-    Top: RMSE level curves with shaded CI
-    Bottom: % improvement vs baseline (lower RMSE is better)
-    """
-    if summary_df.empty:
-        raise ValueError("summary_df is empty.")
-
-    all_models = list(summary_df["model"].unique())
-    models = all_models if models_to_plot is None else [m for m in models_to_plot if m in all_models]
-    print(models)
-    if baseline_model not in models:
-        raise ValueError(f"Baseline model '{baseline_model}' not found.")
-    models = [baseline_model] + [m for m in models if m != baseline_model]
-
-    leads = np.sort(summary_df["lead"].unique())
-
-    # colors (baseline black unless overridden)
-    cycle = plt.rcParams["axes.prop_cycle"].by_key().get("color", [])
-    cmap = {}
-    for i, m in enumerate(models):
-        if custom_colors and m in custom_colors:
-            cmap[m] = custom_colors[m]
-        else:
-            cmap[m] = "black" if m == baseline_model else cycle[(i-1) % len(cycle)]
-
-    # figure
-    fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(14, 10), sharex=True,
-                                   gridspec_kw={'height_ratios': [2, 1]})
-
-    # --- top: RMSE curves with CIs ---
-    for m in models:
-        g = summary_df[summary_df["model"] == m].sort_values("lead")
-        if g.empty: continue
-        x = g["lead"].values
-        y = g["rmse_hat"].values
-        lo = g["ci_lo"].values
-        hi = g["ci_hi"].values
-
-        lw = 3.0 if m == baseline_model else 2.0
-        z = 5 if m == baseline_model else 4
-        label = models_rename.get(m, m) if models_rename else m
-        ax1.plot(x, y, linestyle="-", linewidth=lw, color=cmap[m], label=label, zorder=z)
-        ax1.fill_between(x, lo, hi, color=cmap[m], alpha=(0.12 if m == baseline_model else 0.16), linewidth=0)
-
-    ax1.set_title(title, fontsize=20, pad=10)
-    ax1.set_ylabel("RMSE per 6 hours", fontsize=18)
-    ax1.grid(True, axis="x", linestyle="--", linewidth=0.4, alpha=0.4)
-    ax1.legend(title="", ncols=2, fontsize=21)
-
-    if ymin is not None or ymax is not None:
-        ax1.set_ylim(bottom=ymin if ymin is not None else ax1.get_ylim()[0],
-                     top=ymax if ymax is not None else ax1.get_ylim()[1])
-
-    # --- bottom: % improvement vs baseline ---
-    base = summary_df[summary_df["model"] == baseline_model].sort_values("lead")[["lead", "rmse_hat"]]
-    base = base.rename(columns={"rmse_hat": "rmse_base"})
-
-    for m in models:
-        if m == baseline_model: continue
-        g = summary_df[summary_df["model"] == m].sort_values("lead")[["lead", "rmse_hat"]]
-        merged = pd.merge(base, g, on="lead", how="inner")
-        # improvement = positive is better (lower RMSE than baseline)
-        denom = merged["rmse_base"].replace(0, np.nan)
-        improvement = 100.0 * (merged["rmse_base"] - merged["rmse_hat"]) / denom
-        ax2.plot(merged["lead"].values, improvement.values, linestyle="-", linewidth=2.0, color=cmap[m],
-                 label=models_rename.get(m, m) if models_rename else m)
-
-    ax2.axhline(0, color="black", linewidth=1, linestyle="--")
-    ax2.set_xlabel("Lead time (hours)", fontsize=18)
-    ax2.set_ylabel("% Improvement", fontsize=18)
-    ax2.grid(True, axis="x", linestyle="--", linewidth=0.4, alpha=0.4)
-    ax2.legend(fontsize=18)
-
-    if improvement_ylim is not None:
-        lo, hi = improvement_ylim
-        ax2.set_ylim(bottom=lo if lo is not None else ax2.get_ylim()[0],
-                     top=hi if hi is not None else ax2.get_ylim()[1])
-
-    # ticks every 24h on both
-    step = 24 if (leads.max() - leads.min() >= 96) else max(6, int(np.median(np.diff(leads))) if len(leads) > 1 else 6)
-    ax1.set_xticks(np.arange(leads.min()-12, leads.max() + 1, 24))
-    ax2.set_xticks(np.arange(leads.min()-12, leads.max() + 1, 24))
-
-    ax1.tick_params(axis="both", labelsize=18)
-    ax2.tick_params(axis="both", labelsize=18)
-
-    plt.tight_layout()
-    if savepath:
-        os.makedirs(os.path.dirname(savepath) or ".", exist_ok=True)
-        plt.savefig(savepath, dpi=300, bbox_inches="tight")
-    # plt.show()
-
 
 
 # ---- NEW: average target precipitation per lead (month >= 8) ----
@@ -433,7 +337,7 @@ def compute_avg_target_precip_by_lead(
     """
     Returns a DataFrame with columns:
       - lead_hours (float)
-      - mean_precip_mm_6h (float): India-box mean of target precipitation, averaged across init dates
+      - mean_precip_m_6h (float): India-box mean of target precipitation, averaged across init dates
       - n_inits (int): number of init dates contributing to that lead
     Scans all 'target_init_YYYY-MM-DD 00:00:00.nc' with month >= min_month.
     """
@@ -479,7 +383,7 @@ def compute_avg_target_precip_by_lead(
         df_i = pd.DataFrame({
             "init_date": date_str,
             "lead_hours": lead_hours.astype(float),
-            "precip_mm_6h": step_mean.values.astype(float),
+            "precip_m_6h": step_mean.values.astype(float),
         })
         recs.append(df_i)
 
@@ -492,7 +396,7 @@ def compute_avg_target_precip_by_lead(
 
     agg = (df_all
            .groupby("lead_hours", as_index=False)
-           .agg(mean_precip_mm_6h=("precip_mm_6h", "mean"),
+           .agg(mean_precip_m_6h=("precip_m_6h", "mean"),
                 n_inits=("init_date", "nunique")))
     agg = agg.sort_values("lead_hours").reset_index(drop=True)
     return agg
@@ -600,31 +504,31 @@ def plot_rmse_levels_with_precip(
         ax1.fill_between(x, lo, hi, color=cmap[m], alpha=(0.12 if m == baseline_model else 0.16), linewidth=0)
 
     ax1.set_title(title, fontsize=20, pad=10)
-    ax1.set_ylabel("RMSE", fontsize=18)
+    ax1.set_ylabel("RMSE (m / 6h)", fontsize=18)
     ax1.grid(True, axis="x", linestyle="--", linewidth=0.4, alpha=0.4)
 
-    if ymin is not None or ymax is not None:
-        ax1.set_ylim(bottom=ymin if ymin is not None else ax1.get_ylim()[0],
-                     top=ymax if ymax is not None else ax1.get_ylim()[1])
+    # if ymin is not None or ymax is not None:
+    ax1.set_ylim(bottom=ymin if ymin is not None else ax1.get_ylim()[0]/2,
+                     top=ymax*1.5 if ymax is not None else ax1.get_ylim()[1]*1.1)
 
     # ----- twin y-axis: Average precipitation vs lead -----
     ax1b = ax1.twinx()
     ax1b.plot(
         precip_df["lead_hours"].values,
-        precip_df["mean_precip_mm_6h"].values,
+        precip_df["mean_precip_m_6h"].values,
         linestyle="--",
-        linewidth=4.2,
+        linewidth=2.2,
         color="darkgreen",
         label="Average Precip India",
-        alpha=0.9
+        alpha=0.6
 
     )
     lo_ppt = 0
     hi_ppt = None
     ax1b.set_ylim(bottom=lo_ppt if lo_ppt is not None else ax1b.get_ylim()[0],
-                     top=hi_ppt if hi_ppt is not None else ax1b.get_ylim()[1])
+                     top=hi_ppt if hi_ppt is not None else ax1b.get_ylim()[1]*1.5)
     
-    ax1b.set_ylabel("Avg precip (mm / 6h)", fontsize=20, color="darkgreen")
+    ax1b.set_ylabel("Avg precip (m / 6h)", fontsize=20, color="darkgreen")
     ax1b.tick_params(axis="y", labelcolor="darkgreen", labelsize=18)
 
     # combine legends (RMSE lines + precip)
@@ -722,6 +626,7 @@ def main():
     models_rename = {
         "HRES": "HRES",
         "base": "Base",
+        "Graphcast_Base": "Base Graphcast",
         "finetuned": "Finetuned",
         "fine": "Finetuned",
         "fine_val": "Finetuned-Val",
@@ -732,7 +637,7 @@ def main():
     rmse_summary, precip_by_lead = plot_rmse_levels_with_precip(
         df_rmse,
         rolled_dir=ROLLED_DIR,
-        baseline_model="Graphcast_Finetuned1",
+        baseline_model="Graphcast_Base",
         models_to_plot=None,
         custom_colors=custom_colors,
         models_rename=models_rename,
@@ -741,7 +646,7 @@ def main():
         max_lag=0,
         min_month_for_precip=7,
         savepath=plot_path,
-        improvement_ylim=(None, 80),
+        improvement_ylim=(-45,10),
         ymin=None, ymax=None, lead_col='forecast_horizon_hours'
     )
 
