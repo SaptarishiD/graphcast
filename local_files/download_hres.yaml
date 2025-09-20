@@ -1,0 +1,6 @@
+dates:
+  - year: 2019
+    month: 6
+    start_day: 1
+    initialisation_interval: 1
+    number_of_initialisations: 120

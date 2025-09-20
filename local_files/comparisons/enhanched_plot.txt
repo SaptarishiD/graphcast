@@ -1,0 +1,64 @@
+Loading forecast data from skill_score_proper1.csv...
+Loading ground truth data from /Datastorage/saptarishi.dhanuka_asp25/rolled_out_preds...
+Loaded 28 precipitation values for 2024-08-01 00:00:00
+Loaded 28 precipitation values for 2024-08-02 00:00:00
+Loaded 28 precipitation values for 2024-08-03 00:00:00
+Loaded 28 precipitation values for 2024-08-04 00:00:00
+Loaded 28 precipitation values for 2024-08-05 00:00:00
+Loaded 28 precipitation values for 2024-08-06 00:00:00
+Loaded 28 precipitation values for 2024-08-07 00:00:00
+Loaded 28 precipitation values for 2024-08-08 00:00:00
+Loaded 28 precipitation values for 2024-08-09 00:00:00
+Loaded 28 precipitation values for 2024-08-10 00:00:00
+Loaded 28 precipitation values for 2024-08-11 00:00:00
+Loaded 28 precipitation values for 2024-08-12 00:00:00
+Loaded 28 precipitation values for 2024-08-13 00:00:00
+Loaded 28 precipitation values for 2024-08-14 00:00:00
+Loaded 28 precipitation values for 2024-08-15 00:00:00
+Loaded 28 precipitation values for 2024-08-16 00:00:00
+Loaded 28 precipitation values for 2024-08-17 00:00:00
+Loaded 28 precipitation values for 2024-08-18 00:00:00
+Loaded 28 precipitation values for 2024-08-19 00:00:00
+Loaded 28 precipitation values for 2024-08-20 00:00:00
+Loaded 28 precipitation values for 2024-08-21 00:00:00
+Loaded 28 precipitation values for 2024-08-22 00:00:00
+Loaded 28 precipitation values for 2024-08-23 00:00:00
+Loaded 28 precipitation values for 2024-08-24 00:00:00
+Loaded 28 precipitation values for 2024-08-25 00:00:00
+Loaded 28 precipitation values for 2024-08-26 00:00:00
+Loaded 28 precipitation values for 2024-08-27 00:00:00
+Loaded 28 precipitation values for 2024-08-28 00:00:00
+Loaded 28 precipitation values for 2024-08-29 00:00:00
+Loaded 28 precipitation values for 2024-08-30 00:00:00
+Loaded 28 precipitation values for 2024-08-31 00:00:00
+Loaded 28 precipitation values for 2024-09-01 00:00:00
+Loaded 28 precipitation values for 2024-09-02 00:00:00
+Loaded 28 precipitation values for 2024-09-03 00:00:00
+Loaded 28 precipitation values for 2024-09-04 00:00:00
+Loaded 28 precipitation values for 2024-09-05 00:00:00
+Loaded 28 precipitation values for 2024-09-06 00:00:00
+Loaded 28 precipitation values for 2024-09-07 00:00:00
+Loaded 28 precipitation values for 2024-09-08 00:00:00
+Loaded ground truth data for 39 initialization dates
+Calculated total precipitation for 28 lead times
+
+--- Forecast Summary Statistics ---
+            model region  ...  ci_half_width_standard  ci_half_width_corrected
+0  Graphcast_Base  India  ...            7.721506e-08             1.544301e-07
+1  Graphcast_Base  India  ...            1.122411e-07             2.244822e-07
+2  Graphcast_Base  India  ...            8.941987e-08             1.788397e-07
+3  Graphcast_Base  India  ...            1.518683e-07             3.037365e-07
+4  Graphcast_Base  India  ...            1.312442e-07             2.624885e-07
+
+[5 rows x 8 columns]
+
+--- Ground Truth Total Precipitation by Lead Time ---
+   lead_time_hours  total_precip
+0              6.0     78.352020
+1             12.0     78.352020
+2             18.0     78.352020
+3             24.0     76.989296
+4             30.0     76.989296
+--------------------------
+
+Plot saved to plots/forecast_with_ground_truth.png

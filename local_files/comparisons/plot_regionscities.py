@@ -3,72 +3,95 @@ import matplotlib.pyplot as plt
 import numpy as np
 from pathlib import Path
 
-def plot_regional_errors(values_csv, output_dir="plots"):
-    """
-    Plots error (pred - truth) with CI and average precipitation per region.
-    
-    Parameters
-    ----------
-    values_csv : str
-        Path to CSV containing init_date, lead_time, model, region, truth, pred
-    output_dir : str
-        Directory to save plots
-    """
-    df = pd.read_csv(values_csv)
+def plot_regional_multi_model(csv_path, output_dir="plots"):
+    df = pd.read_csv(csv_path)
     Path(output_dir).mkdir(parents=True, exist_ok=True)
 
+    # Assign a unique color per model for consistency
+    models = df["model"].unique()
+    colors = plt.cm.tab10.colors  # up to 10 distinct colors
+    model_colors = {m: colors[i % len(colors)] for i, m in enumerate(models)}
+
     for region, region_df in df.groupby("region"):
-        records = []
+        fig, ax1 = plt.subplots(figsize=(9, 5))
 
-        # Group by lead time across inits/models
-        for lead_time, lead_df in region_df.groupby("lead_time"):
-            # error = pred - truth (already means)
-            errors = lead_df["pred_mean"] - lead_df["target_mean"]
-            mean_error = errors.mean()
-            stderr_error = errors.std(ddof=1) / np.sqrt(len(errors)) if len(errors) > 1 else 0.0
+        region_records = []
 
-            # average precipitation (truth)
-            mean_precip = lead_df["target_mean"].mean()
+        # --- RMSE per model ---
+        for model, model_df in region_df.groupby("model"):
+            rmse_stats = (
+                model_df.groupby("lead_time")["rmse"]
+                .agg(["mean", "std", "count"])
+                .reset_index()
+            )
+            rmse_stats["stderr"] = rmse_stats["std"] / np.sqrt(rmse_stats["count"])
 
-            records.append({
-                "lead_time": lead_time,
-                "mean_error": mean_error,
-                "stderr_error": stderr_error,
-                "mean_precip": mean_precip
-            })
+            ax1.plot(
+                rmse_stats["lead_time"],
+                rmse_stats["mean"],
+                color=model_colors[model],
+                linestyle="-",
+                label=f"RMSE ({model})",
+            )
+            ax1.fill_between(
+                rmse_stats["lead_time"],
+                rmse_stats["mean"] - rmse_stats["stderr"],
+                rmse_stats["mean"] + rmse_stats["stderr"],
+                color=model_colors[model],
+                alpha=0.2,
+            )
 
-        stats_df = pd.DataFrame(records).sort_values("lead_time")
-
-        # --- Plot ---
-        fig, ax1 = plt.subplots(figsize=(8, 5))
-
-        # Error with CI
-        ax1.plot(stats_df["lead_time"], stats_df["mean_error"], color="tab:red", label="Error (Pred - Truth)")
-        ax1.fill_between(
-            stats_df["lead_time"],
-            stats_df["mean_error"] - stats_df["stderr_error"],
-            stats_df["mean_error"] + stats_df["stderr_error"],
-            color="tab:red", alpha=0.2
-        )
         ax1.set_xlabel("Lead Time (hours)")
-        ax1.set_ylabel("Error (Pred - Truth)", color="tab:red")
+        ax1.set_ylabel("RMSE", color="tab:red")
         ax1.tick_params(axis="y", labelcolor="tab:red")
 
-        # Avg precipitation on secondary axis
+        # --- Precipitation curves ---
         ax2 = ax1.twinx()
-        ax2.plot(stats_df["lead_time"], stats_df["mean_precip"], color="tab:blue", label="Mean Precip")
+
+        # Target precip (truth)
+        target_stats = (
+            region_df.groupby("lead_time")["target_mean"]
+            .mean()
+            .reset_index()*2
+        )
+        ax2.plot(
+            target_stats["lead_time"],
+            target_stats["target_mean"],
+            color="black",
+            linestyle="--",
+            label="Target Precip",
+        )
+
+        # Model precip predictions
+        for model, model_df in region_df.groupby("model"):
+            pred_stats = (
+                model_df.groupby("lead_time")["pred_mean"]
+                .mean()
+                .reset_index()
+            )
+            ax2.plot(
+                pred_stats["lead_time"],
+                pred_stats["pred_mean"],
+                color=model_colors[model],
+                linestyle=":",
+                label=f"Pred Precip ({model})",
+            )
+
         ax2.set_ylabel("Average Precipitation (mm)", color="tab:blue")
         ax2.tick_params(axis="y", labelcolor="tab:blue")
 
-        # Titles and save
+        # --- Legend ---
+        lines1, labels1 = ax1.get_legend_handles_labels()
+        lines2, labels2 = ax2.get_legend_handles_labels()
+        ax1.legend(lines1 + lines2, labels1 + labels2, loc="upper right")
+
         plt.title(f"Region: {region}")
         fig.tight_layout()
-        plt.savefig(Path(output_dir) / f"plot_{region}.png", dpi=150)
+
+        plt.savefig(Path(output_dir) / f"regionscitiesplot_{region}.png", dpi=150)
         plt.close()
 
     print(f"Plots saved to {output_dir}/")
 
 
-
-plot_regional_errors("rmse_regions_ALL_MODELS.csv", output_dir="plots")
-
+plot_regional_multi_model("rmse_regions_ALL_MODELS.csv", output_dir="plots")

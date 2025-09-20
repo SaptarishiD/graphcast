@@ -7,6 +7,42 @@ from typing import Optional, Dict, Tuple
 import math
 import datetime
 from pathlib import Path
+import cartopy.crs as ccrs
+
+
+
+
+
+
+def accum_time_and_plot(ds, var_name='total_precipitation_6hr', indiaplot=True):
+        
+        ds = ds.sum(dim='time')
+        latmax = 38
+        latmin = 6
+        lonmin = 68
+        lonmax = 98
+        if indiaplot:
+            if 'latitude' in ds.coords:
+                if ds.latitude.values[0] - ds.latitude.values[1] < 0:
+                    ds.sel(latitude=slice(latmin, latmax), longitude=slice(lonmin, lonmax))[var_name].plot()
+                else:
+                    ds.sel(latitude=slice(latmax, latmin), longitude=slice(lonmin, lonmax))[var_name].plot()
+            else:
+                if ds.lat.values[0] - ds.lat.values[1] < 0:
+                    ds.sel(lat=slice(latmin, latmax), lon=slice(lonmin, lonmax))[var_name].plot()
+                else:
+                    ds.sel(lat=slice(latmax, latmin), lon=slice(lonmin, lonmax))[var_name].plot()
+        else:
+            if 'latitude' in ds.coords:
+                if ds.latitude.values[0] - ds.latitude.values[1] < 0:
+                    ds[var_name].plot()
+                else:
+                    ds[var_name].plot()
+            else:
+                if ds.lat.values[0] - ds.lat.values[1] < 0:
+                    ds[var_name].plot()
+                else:
+                    ds[var_name].plot()
 
 
 
@@ -20,7 +56,81 @@ from pathlib import Path
 
 
 
+def plot_sample_from_ds(ds, var_name='total_precipitation_6hr', indiaplot=True, time_index=0, time_stamp = None, step=None):
+    if time_stamp:
+        time_index = ds.time.to_index().get_loc(time_stamp)
+    if step in ds.dims:
+        ds = ds.isel(step=step)
+    latmax = 38
+    latmin = 6
+    lonmin = 68
+    lonmax = 98
+    if indiaplot:
+        if 'latitude' in ds.coords:
+            if ds.latitude.values[0] - ds.latitude.values[1] < 0:
+                ds.isel(time=time_index).sel(latitude=slice(latmin, latmax), longitude=slice(lonmin, lonmax))[var_name].plot()
+            else:
+                ds.isel(time=time_index).sel(latitude=slice(latmax, latmin), longitude=slice(lonmin, lonmax))[var_name].plot()
+        else:
+            if ds.lat.values[0] - ds.lat.values[1] < 0:
+                ds.isel(time=time_index).sel(lat=slice(latmin, latmax), lon=slice(lonmin, lonmax))[var_name].plot()
+            else:
+                ds.isel(time=time_index).sel(lat=slice(latmax, latmin), lon=slice(lonmin, lonmax))[var_name].plot()
+    else:
+        if 'latitude' in ds.coords:
+            if ds.latitude.values[0] - ds.latitude.values[1] < 0:
+                ds.isel(time=time_index)[var_name].plot()
+            else:
+                ds.isel(time=time_index)[var_name].plot()
+        else:
+            if ds.lat.values[0] - ds.lat.values[1] < 0:
+                ds.isel(time=time_index)[var_name].plot()
+            else:
+                ds.isel(time=time_index)[var_name].plot()
 
+
+
+
+                
+
+latmax = 38
+latmin = 6
+lonmin = 68
+lonmax = 98
+
+def compute_difference_with_targets_sims(preds_old, targets, time_step, var_name, plots_dir='./output', plot=True):
+    fig, ax = plt.subplots(figsize=(8, 6), subplot_kw={'projection': ccrs.PlateCarree()})
+    extent = [68, 98, 6, 38]  # Focus on India
+
+    var_pred_old = preds_old[var_name]
+    var_targets = targets[var_name]
+
+    if var_pred_old.lat.values[0] - var_pred_old.lat.values[1] < 0:
+        var_base = var_pred_old.isel(time=time_step).sel(lat=slice(latmin, latmax), lon=slice(lonmin, lonmax)).squeeze()
+    else:
+        var_base = var_pred_old.isel(time=time_step).sel(lat=slice(latmax, latmin), lon=slice(lonmin, lonmax)).squeeze()
+
+    if var_targets.lat.values[0] - var_targets.lat.values[1] < 0:
+        var_targets = var_targets.isel(time=time_step).sel(lat=slice(latmin, latmax), lon=slice(lonmin, lonmax)).squeeze()
+    else:
+        var_targets = var_targets.isel(time=time_step).sel(lat=slice(latmax, latmin), lon=slice(lonmin, lonmax)).squeeze()
+
+    difference = var_base - var_targets
+
+
+    if plot:
+        difference.plot.pcolormesh(
+            ax=ax, transform=ccrs.PlateCarree(), cmap='bwr',
+            cbar_kwargs={'label': 'Difference'})
+        ax.set_extent(extent)
+        ax.coastlines()
+        ax.set_title(f"Finetuned Prediction vs Ground Truth at Time Step {time_step}")
+
+        plt.tight_layout()
+        plt.savefig(f'{plots_dir}/difference_base{time_step}_era5.png')
+        plt.close()
+
+    return (difference)
 
 
 

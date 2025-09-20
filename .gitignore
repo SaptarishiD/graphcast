@@ -1,3 +1,11 @@
+*.nc
+*.csv
+*.HDF5
+*.gif
+*.png
+local_files/output/
+local_files/utils/
+ne_110m_coastline*
 .DS_Store
 scripts/
 misc/

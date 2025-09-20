@@ -1,0 +1,30 @@
+# Required paths
+csv_path: "skill_score_India_2025-08-2110-39-16_ACC.csv"
+accumulated_nc: "/home/saptarishi.dhanuka_asp25/imerg_2014_6h_accumulated.nc"
+
+# Output
+output_path: "plots/forecast_with_acc_clean.png"
+
+plot_var: 'acc'
+
+# Stats / plotting
+k_factor: 2.0
+baseline_model: "Graphcast_Base_2014"
+
+# Which models to plot (optional)
+models_to_plot:
+  - "Graphcast_Base_2014"
+  - "Graphcast_Finetuned1_2014"
+  - "Graphcast_Finetuned2_2014"
+
+
+# Rename models in the legend (optional)
+model_rename:
+  "Graphcast_Base_2014": "Base"
+  "Graphcast_Finetuned1_2014": "Finetuned1"
+  "Graphcast_Finetuned2_2014": "Finetuned2"
+
+
+# Caching behavior
+use_saved_data: true
+force_recompute: false

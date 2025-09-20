@@ -1,0 +1,12 @@
+models:
+  original: './origs/graphcast_1_13.npz'
+  model1: "graphcast_1_13_orig_2024-06-01_2024-09-15_FORECAST28.npz"
+  model2: "graphcast_1_13_orig_2024-06-01_2024-07-30_FORECAST28.npz"
+
+ground_truth:
+  era5: 0
+  imerg: 
+
+forecasts:
+  hres_determ:
+  imd_determ: 

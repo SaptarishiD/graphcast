@@ -19,13 +19,18 @@ from scipy import stats
 LAT_MIN, LAT_MAX = 6, 38
 LON_MIN, LON_MAX = 65, 95
 
-ROLLED_DIR = "/Datastorage/saptarishi.dhanuka_asp25/rolled_out_preds/025res"
-HRES_PATH = "/Datastorage/divij.khaitan_asp25/forecasts_2025/correct_6hourly_hres_forecasts20250701_20250831.nc"
+ROLLED_DIR = "/Datastorage/saptarishi.dhanuka_asp25/rolled_out_preds"
+base_hres_dir = "/Datastorage/divij.khaitan_asp25/"
+forecast_year = 2014
+forecast_file = f"forecasts_{forecast_year}/corrected_hres_forecasts_{forecast_year}0601_{forecast_year}0930.nc"
+HRES_PATH = os.path.join(base_hres_dir, forecast_file)
 
-TARGET_PREFIX = "era_precip025_target_init_"
-BASE_PREFIX = "'base_precip025_init_"
-FINETUNED_PREFIX = "fine_precip025_init_"  # change if your finetuned prefix differs
+# HRES_PATH = "/Datastorage/divij.khaitan_asp25/forecasts_2014/corrected_hres_forecasts_20140601_20140930.nc"
 
+TARGET_PREFIX = f"target_init_6h_precip_"
+BASE_PREFIX = f"base_init_"
+FINETUNED_PREFIX = "fine_graphcast_1_13_orig_2014-06-01_2014-07-30_FORECAST28_weighing_6HOURLY_expt2_val_good_6h_init_"
+FINETUNED_PREFIX = "fine_init_"
 TARGET_VAR = "total_precipitation_6hr"  # (assumed) mm / 6h
 HRES_VAR = "tp_6h"                         # meters / 6h -> convert to mm
 
@@ -85,6 +90,69 @@ def inflation_factor_k(series, max_lag=2):
     k2 = 1.0 + 2.0 * np.sum(rhos)
     return float(np.sqrt(max(k2, 1.0)))  # never deflate
 
+
+
+import jax.numpy as jnp
+import xarray as xr
+import geopandas as gpd
+from shapely.geometry import box, mapping
+from shapely.ops import unary_union
+from rasterio.features import geometry_mask
+
+
+def mask_dbase_india_buffer(dbase, buffer=True, buffer_deg=2.0, crs="EPSG:4326", lat_thresh=23.5):
+
+    # Load world boundaries from Natural Earth (built-in to geopandas)
+    world = gpd.read_file("/Datastorage/saptarishi.dhanuka_asp25/ne_110m_admin_0_countries.shp")
+    india = world[world.SOVEREIGNT == 'India']
+    india_gdf = india.geometry
+
+    """
+    return a GeoSeries with the original land unioned with a 1° coastal buffer
+    everywhere south of lat_thresh.
+    """
+    # 1. Ensure it's in lat/lon
+    india_gdf = india_gdf.to_crs(crs)
+    
+    # 2. Merge all parts into one Polygon/MultiPolygon
+    land = unary_union(india_gdf.geometry)
+    
+    # 3. Build a global mask for lat < lat_thresh
+    lat_mask = box(-180, -90, 180, lat_thresh)
+    
+    # 4. Buffer the land by buffer_deg (in degrees)
+    land_buffered = land.buffer(buffer_deg)
+    
+    # 5. Restrict the buffer to lat < lat_thresh, then subtract land to get just the new strip
+    coastal_extension = (land_buffered
+                         .intersection(lat_mask)
+                         .difference(land))
+    
+    # 6. Union land + extension
+    extended = land.union(coastal_extension)
+
+    extended_series = gpd.GeoSeries([extended], crs=crs)
+
+    mask = geometry_mask(
+    [mapping(extended_series.iloc[0])],     # List of geometries
+    out_shape=(len(dbase.lat), len(dbase.lon)),
+    transform=dbase.rio.transform(),
+    invert=True,                           # Areas *inside* geometry == True
+    all_touched=False
+)
+
+    # Convert mask to xarray DataArray (True inside India, False outside)
+    mask_xr = xr.DataArray(mask, coords={"lat": dbase.lat, "lon": dbase.lon}, dims=("lat", "lon"))
+
+    # Apply mask using xarray.where: keep data inside India, zero out rest
+    dbase_masked = xr.where(mask_xr, dbase, 0)  # or use `np.nan` instead of 0 if you prefer
+    # dbase_masked = dbase_masked.assign_coords(lon=((dbase_masked.lon + 360) % 360))
+    # dbase_masked = dbase_masked.sortby("lon")
+
+
+    return dbase_masked
+
+
 def _select_bbox(da, lat_min=LAT_MIN, lat_max=LAT_MAX, lon_min=LON_MIN, lon_max=LON_MAX):
     """Select a lat/lon box, robust to coordinate direction (ascending/descending)."""
     lat = da["lat"]; lon = da["lon"]
@@ -130,7 +198,7 @@ def create_regridder(src_da, dst_da):
 def regrid_each_step(da_step_lat_lon, regridder, step_dim="step", savepath = None):
     if os.path.exists(savepath):
         print(f"Returning regridded hres with {savepath.split('/')[-1]} ")
-        return xr.open_dataset(savepath)
+        return xr.open_dataset(savepath, decode_timedelta=True)
     out_list = []
     for i in range(da_step_lat_lon.sizes[step_dim]):
         out_i = regridder(da_step_lat_lon.isel({step_dim: i}))
@@ -189,6 +257,7 @@ def compute_rmse_table(rolled_dir=ROLLED_DIR,
 
     logging.info("Opening HRES...")
     hres = xr.open_dataset(hres_path, decode_timedelta=True)
+    print(hres_path)
     hres_tp = hres[HRES_VAR]  # (time, step, lat, lon), meters / 6h
 
     logging.info("Creating regridder (HRES grid -> target grid)...")
@@ -198,7 +267,7 @@ def compute_rmse_table(rolled_dir=ROLLED_DIR,
 
     rows = []
 
-    for date_str in tqdm(init_dates[25:50], desc="Processing init dates"):
+    for date_str in tqdm(init_dates, desc="Processing init dates"):
         print(date_str)
         init_iso = f"{date_str}T00:00:00"
         init_dt64 = np.datetime64(init_iso)
@@ -214,16 +283,16 @@ def compute_rmse_table(rolled_dir=ROLLED_DIR,
         # HRES -> mm, drop step 0
         try:
             if hres_tp.attrs.get('units') == 'm':
-                print("Units in metres already")
+                # print("Units in metres already")
                 hres_sel = hres_tp.sel(time=np.datetime64(init_iso)).isel(step=slice(1, None))
             else:
                 hres_sel = hres_tp.sel(time=np.datetime64(init_iso)).isel(step=slice(1, None)) * 1000.0
         except Exception as e:
             logging.warning(f"HRES selection failed for {date_str}: {e}")
             continue
-        print("Starting Regrid")
-        hres_rg = regrid_each_step(hres_sel, regridder, step_dim="step", savepath = '/Datastorage/saptarishi.dhanuka_asp25/hres_2025_regridded_07.nc')
-        print("Finished Regrid")
+        # print("Starting Regrid")
+        hres_rg = regrid_each_step(hres_sel, regridder, step_dim="step", savepath = '/Datastorage/saptarishi.dhanuka_asp25/hres_2014_regridded_07.nc')
+        # print("Finished Regrid")
 
         # Align steps across GT & HRES; drop GT step 0 to match 6h,12h,...
         common_steps = min(hres_rg.sizes["step"], gt.sizes["step"] - 1)
@@ -242,27 +311,34 @@ def compute_rmse_table(rolled_dir=ROLLED_DIR,
 
         ft_da = None
         finetuned_path = os.path.join(rolled_dir, f"{finetuned_prefix}{date_str} 00:00:00.nc")
+        print(finetuned_path)
         if os.path.exists(finetuned_path):
             ft_ds = xr.open_dataset(finetuned_path,decode_timedelta=True)
             ft_da = _standardize_pred_da(ft_ds, var=TARGET_VAR).isel(step=slice(1, 1 + common_steps))
+        else:
+            print("Finetuned path doesn't exist")
 
         # lead hours from GT step coordinate
         lead_hours = _compute_lead_hours_from_coord(gt_use["step"], init_dt64)
 
         def rmse_over_india(pred_da, truth_da):
-            pred_box = _select_bbox(pred_da)
-            truth_box = _select_bbox(truth_da)
+            pred_box = mask_dbase_india_buffer(pred_da)
+            truth_box = mask_dbase_india_buffer(truth_da)
             # pred_box = pred_da
             # truth_box = truth_da
             diff = pred_box - truth_box
             return np.sqrt((diff ** 2).mean(dim=["lat", "lon"]))
 
         # HRES rows
-        rmse_hres = rmse_over_india(hres_use, gt_use).values
-        print(rmse_hres.data_vars)
-        print(rmse_hres)
-        print(type(rmse_hres))
-        for lh, val in zip(lead_hours, rmse_hres):
+        # print(hres_use.data_vars)
+        # print(gt_use.data_vars)
+        rmse_hres = rmse_over_india(hres_use, gt_use)
+        # print(rmse_hres)
+        # print(rmse_hres['__xarray_dataarray_variable__'])
+        # print(type(rmse_hres))
+        # print(rmse_hres.data_vars)
+        for lh, val in zip(lead_hours, rmse_hres['__xarray_dataarray_variable__']):
+            # print(lh, val)
             rows.append({"model": "HRES", "init_date": date_str,
                          "forecast_horizon_hours": float(lh), "rmse": float(val)})
 
@@ -342,7 +418,7 @@ def compute_avg_target_precip_by_lead(
     Scans all 'target_init_YYYY-MM-DD 00:00:00.nc' with month >= min_month.
     """
     import glob
-    year = 2025
+    year = 2014
 
     all_targets = sorted(glob.glob(os.path.join(rolled_dir, f"{target_prefix}*.nc")))
     # print(all_targets)
@@ -363,7 +439,6 @@ def compute_avg_target_precip_by_lead(
             continue
 
         init_iso = f"{date_str}T00:00:00"
-        print(init_iso)
         init_dt64 = np.datetime64(init_iso)
 
         ds = xr.open_dataset(p,decode_timedelta=True)
@@ -505,11 +580,18 @@ def plot_rmse_levels_with_precip(
 
     ax1.set_title(title, fontsize=20, pad=10)
     ax1.set_ylabel("RMSE (m / 6h)", fontsize=18)
+    # Force scientific notation on RMSE axis
+    fmt_rmse = ScalarFormatter(useMathText=True)
+    fmt_rmse.set_scientific(True)
+    fmt_rmse.set_powerlimits((0, 0))  # always sci
+    ax1.yaxis.set_major_formatter(fmt_rmse)
+    ax1.ticklabel_format(axis="y", style="sci", scilimits=(0, 0), useMathText=True)
+
     ax1.grid(True, axis="x", linestyle="--", linewidth=0.4, alpha=0.4)
 
     # if ymin is not None or ymax is not None:
-    ax1.set_ylim(bottom=ymin if ymin is not None else ax1.get_ylim()[0]/2,
-                     top=ymax*1.5 if ymax is not None else ax1.get_ylim()[1]*1.1)
+    ax1.set_ylim(bottom=ymin if ymin is not None else ax1.get_ylim()[0],
+                     top=ymax*1.5 if ymax is not None else ax1.get_ylim()[1])
 
     # ----- twin y-axis: Average precipitation vs lead -----
     ax1b = ax1.twinx()
@@ -526,9 +608,16 @@ def plot_rmse_levels_with_precip(
     lo_ppt = 0
     hi_ppt = None
     ax1b.set_ylim(bottom=lo_ppt if lo_ppt is not None else ax1b.get_ylim()[0],
-                     top=hi_ppt if hi_ppt is not None else ax1b.get_ylim()[1]*1.5)
+                     top=hi_ppt if hi_ppt is not None else ax1b.get_ylim()[1])
     
     ax1b.set_ylabel("Avg precip (m / 6h)", fontsize=20, color="darkgreen")
+    # Force scientific notation on precip axis
+    fmt_ppt = ScalarFormatter(useMathText=True)
+    fmt_ppt.set_scientific(True)
+    fmt_ppt.set_powerlimits((0, 0))  # always sci
+    ax1b.yaxis.set_major_formatter(fmt_ppt)
+    ax1b.ticklabel_format(axis="y", style="sci", scilimits=(0, 0), useMathText=True)
+
     ax1b.tick_params(axis="y", labelcolor="darkgreen", labelsize=18)
 
     # combine legends (RMSE lines + precip)
@@ -548,7 +637,7 @@ def plot_rmse_levels_with_precip(
         ax2.plot(merged["lead"].values, improvement.values, linestyle="-", linewidth=2.0,
                  color=cmap[m], label=(models_rename.get(m, m) if models_rename else m))
 
-    ax2.axhline(0, color="black", linewidth=1, linestyle="--")
+    ax2.axhline(0, color="black", linewidth=0.1, linestyle="--")
     ax2.set_xlabel("Lead time (hours)", fontsize=18)
     ax2.set_ylabel("% Improvement", fontsize=18)
     ax2.grid(True, axis="x", linestyle="--", linewidth=0.9, alpha=0.4)
@@ -614,6 +703,7 @@ def main():
 
     df_rmse = df
 
+
     # Optional: colors & rename (edit as desired)
     custom_colors = {
         "HRES": "tab:purple",
@@ -627,6 +717,7 @@ def main():
         "HRES": "HRES",
         "base": "Base",
         "Graphcast_Base": "Base Graphcast",
+        "Graphcast_Finetuned1": "Finetuned",
         "finetuned": "Finetuned",
         "fine": "Finetuned",
         "fine_val": "Finetuned-Val",
@@ -638,15 +729,15 @@ def main():
         df_rmse,
         rolled_dir=ROLLED_DIR,
         baseline_model="Graphcast_Base",
-        models_to_plot=None,
+        models_to_plot=["Graphcast_Base", "Graphcast_Finetuned1", 'HRES'], 
         custom_colors=custom_colors,
         models_rename=models_rename,
         title="RMSE Comparison and % Improvement + Avg Precip",
-        alpha=0.20,
+        alpha=1.0,
         max_lag=0,
-        min_month_for_precip=7,
+        min_month_for_precip=8,
         savepath=plot_path,
-        improvement_ylim=(-45,10),
+        improvement_ylim=None,
         ymin=None, ymax=None, lead_col='forecast_horizon_hours'
     )
 

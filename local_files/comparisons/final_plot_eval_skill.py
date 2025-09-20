@@ -1,16 +1,14 @@
 # plot_with_imerg_targets.py
+import os
+import sys
+import yaml
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
-import seaborn as sns
-import argparse
-import os
 import xarray as xr
-from scipy import stats
-from datetime import datetime, timedelta
-
-import numpy as np
+from datetime import datetime
 import pandas as pd
+import numpy as np
 import xarray as xr
 
 def _maybe_fix_lon(ds, lon_min=65.0, lon_max=95.0):
@@ -53,7 +51,6 @@ def load_target_precip_from_accumulated(accumulated_nc_path,
         ds_india = ds[[varname]].sel(lat=slice(india_lat_min, india_lat_max),
                                       lon=slice(india_lon_min, india_lon_max))
     except Exception as e:
-        # If slice ordering is reversed, try reversing
         if verbose:
             print("Warning: spatial slice raised:", e, "trying reversed lat/lon order.")
         ds_india = ds[[varname]].sel(lat=slice(india_lat_max, india_lat_min),
@@ -90,15 +87,12 @@ def load_target_precip_from_accumulated(accumulated_nc_path,
             # try exact match
             sel = None
             try:
-                # if the exact numpy datetime64 exists, .sel will find it; else will raise KeyError
                 sel = ds_india[varname].sel(time=np.datetime64(desired_time))
                 used_time = np.datetime64(desired_time)
                 used_method = 'exact'
             except (KeyError, IndexError, ValueError):
-                # fallback to nearest with tolerance
                 try:
                     sel = ds_india[varname].sel(time=desired_time, method='nearest', tolerance=time_tolerance)
-                    # find which time was selected
                     nearest_time = pd.to_datetime(sel['time'].values)
                     used_time = nearest_time
                     used_method = 'nearest'
@@ -171,11 +165,10 @@ def create_target_dataframe(target_data):
                 'precipitation': (np.nan if np.isnan(precip_val) else float(precip_val))
             })
     result = pd.DataFrame(rows)
-    result.to_csv('test_target.csv')
+    result.to_csv('test_target.csv', index=False)
     return pd.DataFrame(rows)
 
 
-# ---------------------- The plotting function (modified) -----------------------
 def plot_forecast_with_ground_truth(csv_path: str,
                                     accumulated_nc_path: str,
                                     output_path: str,
@@ -183,7 +176,8 @@ def plot_forecast_with_ground_truth(csv_path: str,
                                     baseline_model: str = "Graphcast_Base",
                                     models_to_plot: list = None,
                                     model_rename: dict = None,
-                                    use_saved_data: bool = True):
+                                    use_saved_data: bool = True,
+                                    plot_var: str = None):
     # 1. Load forecast CSV
     print(f"Loading forecast CSV: {csv_path}")
     df = pd.read_csv(csv_path)
@@ -200,7 +194,6 @@ def plot_forecast_with_ground_truth(csv_path: str,
     elif 'forecast_horizon_days' in df.columns:
         df['lead_time_hours'] = df['forecast_horizon_days'] * 24
     elif 'forecast_horizon' in df.columns:
-        # your format: '123456789 nanoseconds'
         df['lead_time_hours'] = pd.to_timedelta(df['forecast_horizon']).dt.total_seconds() / 3600
     elif 'forecast_horizon_hours' in df.columns:
         df['lead_time_hours'] = df['forecast_horizon_hours']
@@ -221,7 +214,7 @@ def plot_forecast_with_ground_truth(csv_path: str,
     unique_init_dates = df['init_date'].unique()
     print(f"Loading ground truth from {accumulated_nc_path} for {len(unique_init_dates)} unique inits (August onward only)...")
 
-    if not os.path.exists('test_target.csv'):
+    if (not use_saved_data) or (not os.path.exists('test_target.csv')):
         target_data = load_target_precip_from_accumulated(
             accumulated_nc_path,
             unique_init_dates,
@@ -233,160 +226,223 @@ def plot_forecast_with_ground_truth(csv_path: str,
             n_steps=28,
             time_tolerance=pd.Timedelta('3h')
         )
+        target_df = create_target_dataframe(target_data) if target_data else pd.DataFrame()
     else:
-        target_data = None
         target_df = pd.read_csv('test_target.csv')
         target_df['lead_time_hours'] = pd.to_timedelta(target_df['forecast_horizon']).dt.total_seconds() / 3600
         print(f"Loaded ground truth for initializations (after month>=8 filter).")
 
-    if target_data:
-        if not os.path.exists('test_target.csv'):
-            target_df = create_target_dataframe(target_data)
-        else:
-            target_df = pd.read_csv('test_target.csv')
-        target_df['lead_time_hours'] = pd.to_timedelta(target_df['forecast_horizon']).dt.total_seconds() / 3600
-        print(f"Loaded ground truth for {len(target_data)} initializations (after month>=8 filter).")
-    else:
-        print("Warning: No target ground truth extracted from accumulated dataset.")
-        target_df = pd.DataFrame()
-
-    # 3. summary stats for forecast models (uses mse column)
+    # 3. summary stats for forecast models (uses rmse column)
     group_cols = ['model'] + (['region'] if has_region else []) + ['lead_time_hours']
     summary_df = (
-        df.groupby(group_cols)['acc']
+        df.groupby(group_cols)[plot_var]
           .agg(['mean', 'std', 'count'])
           .reset_index()
-          .rename(columns={'mean': 'mse_mean', 'std': 'mse_std', 'count': 'n_samples'})
+          .rename(columns={'mean': f'{plot_var}_mean', 'std': f'{plot_var}_std', 'count': 'n_samples'})
     )
-    summary_df['mse_std'].fillna(0, inplace=True)
+    summary_df[f'{plot_var}_std'].fillna(0, inplace=True)
 
     # confidence intervals
     z_score = 1.96
-    summary_df['ci_half_width_standard'] = z_score * (summary_df['mse_std'] / np.sqrt(summary_df['n_samples']))
+    summary_df['ci_half_width_standard'] = z_score * (summary_df[f'{plot_var}_std'] / np.sqrt(summary_df['n_samples'].clip(lower=1)))
     summary_df['ci_half_width_corrected'] = k_factor * summary_df['ci_half_width_standard']
 
     # 4. Ground truth - calculate total precipitation at each lead time (no mean/std)
-    import datetime
-    current_date = datetime.datetime.now()
+    current_date = datetime.now().strftime("%Y%m%d_%H%M%S")
     if not target_df.empty:
-        # Sum precipitation across all init dates for each lead time
         precip_totals = target_df.groupby('lead_time_hours')['precipitation'].sum().reset_index()
         precip_totals['model'] = 'Ground_Truth'
         precip_totals['region'] = 'India'
-        # Save precipitation totals for future use
-        precip_totals.to_csv(f'precipitation_totals{current_date}.csv', index=False)
-        print("Saved precipitation totals to precipitation_totals.csv")
+        precip_totals.to_csv(f'precipitation_totals_{current_date}.csv', index=False)
+        print("Saved precipitation totals to CSV.")
     else:
         precip_totals = pd.DataFrame()
 
     # Save summary statistics for future use
-    summary_df.to_csv(f'forecast_summary_stats{current_date}.csv', index=False)
-    print("Saved forecast summary statistics to forecast_summary_stats.csv")
+    summary_df.to_csv(f'forecast_summary_stats_{current_date}.csv', index=False)
+    print("Saved forecast summary statistics to CSV.")
 
-    # 5. Plotting - modified to show MSE and precipitation on same plot with dual y-axis
+    # 5. Plotting - MSE (left) + precipitation (right)
     plt.style.use('seaborn-v0_8-whitegrid')
-    fig, ax2 = plt.subplots(1, 1, figsize=(16, 8))
-    
-    # Create second y-axis for precipitation
-    ax1 = ax2.twinx()
+    fig = plt.figure(figsize=(16, 10))
+    gs = fig.add_gridspec(2, 1, height_ratios=[2.0, 1.0], hspace=0.25)
+
+    # Top panel: MSE (left axis) + precipitation (right axis)
+    ax_left = fig.add_subplot(gs[0, 0])
+    ax_right = ax_left.twinx()
 
     manual_colors = {
-        "Graphcast_Base_2014": "tab:blue", 
-        "Graphcast_Finetuned1_2014": "tab:orange", 
+        "Graphcast_Base_2014-08-01_2014-09-30": "tab:blue",
+        "Graphcast_Finetuned_1_graphcast_1_13_orig_2014-06-01_2014-07-30_FORECAST28_dynamic_weighing_india_sharp_mask_expt7.npz": "tab:orange",
         "Graphcast_Finetuned2 (India)": "tab:green",
         "Base": "tab:blue",
         "Finetuned1": "tab:orange"
     }
 
     group_cols_for_plot = ['model', 'region'] if has_region else ['model']
-    
-    # Plot MSE on main axis (ax2 - left y-axis)
+
+    # For % improvement computation, pre-slice baseline by region (if any)
+    baseline_mask = (summary_df['model'] == baseline_model)
+    if has_region:
+        baseline_by_region = {
+            r: df_r.sort_values('lead_time_hours')[['lead_time_hours', f'{plot_var}_mean']].rename(columns={f'{plot_var}_mean': f'{plot_var}_base'})
+            for r, df_r in summary_df[baseline_mask].groupby('region')
+        }
+    else:
+        base_df_only = summary_df[baseline_mask].sort_values('lead_time_hours')[
+            ['lead_time_hours', f'{plot_var}_mean']
+        ].rename(columns={f'{plot_var}_mean': f'{plot_var}_base'})
+
+    # Top panel: plot the MSE curves
+    line_handles, line_labels = [], []
     for group_keys, group_data in summary_df.groupby(group_cols_for_plot):
         model_name = group_keys if isinstance(group_keys, str) else group_keys[0]
         region = None if isinstance(group_keys, str) else group_keys[1]
-        # print("\n Model name", model_name)
         display_name = model_rename.get(model_name, model_name) if model_rename else model_name
         label = display_name if region is None else f"{display_name} ({region})"
-        
+
         if model_name == 'HRES':
             continue
-            
+
         color = manual_colors.get(label, manual_colors.get(display_name, "black"))
         group_data = group_data.sort_values('lead_time_hours')
-        
-        ax2.plot(group_data['lead_time_hours'], group_data['mse_mean'], 
-                marker='o', linestyle='-', color=color, label=label, linewidth=2)
-        ax2.fill_between(group_data['lead_time_hours'],
-                        group_data['mse_mean'] - group_data['ci_half_width_corrected'],
-                        group_data['mse_mean'] + group_data['ci_half_width_corrected'],
-                        color=color, alpha=0.1)
 
-    # Plot total precipitation on second axis (ax1 - right y-axis)
+        lh, = ax_left.plot(
+            group_data['lead_time_hours'],
+            group_data[f'{plot_var}_mean'],
+            marker='o', linestyle='-', color=color, label=label, linewidth=2
+        )
+        ax_left.fill_between(
+            group_data['lead_time_hours'],
+            group_data[f'{plot_var}_mean'] - group_data['ci_half_width_corrected'],
+            group_data[f'{plot_var}_mean'] + group_data['ci_half_width_corrected'],
+            color=color, alpha=0.1
+        )
+        line_handles.append(lh)
+        line_labels.append(label)
+
+    # Top panel: precipitation on right axis
     if not precip_totals.empty:
-        ax1.plot(precip_totals['lead_time_hours'], precip_totals['precipitation'], 
-                linestyle='-', color='red', label='Ground Truth Total Precipitation', 
-                linewidth=3, alpha=0.4)
+        rh, = ax_right.plot(
+            precip_totals['lead_time_hours'],
+            precip_totals['precipitation'],
+            linestyle='-',
+            label='Ground Truth Total Precipitation',
+            linewidth=3, alpha=0.1, color='red'
+        )
+        line_handles.append(rh)
+        line_labels.append('Ground Truth Total Precipitation')
 
-    # Configure axes
-    ax2.set_title('Forecast Skill (MSE) and Ground Truth Precipitation vs. Lead Time', fontsize=16, pad=20)
-    ax2.set_ylabel('Average MSE (Lower is better)', fontsize=12, color='black')
-    ax2.ticklabel_format(style='sci', axis='y', scilimits=(0, 0))
-    ax2.grid(True, which='both', linestyle='--', linewidth=0.5)
-    
-    ax1.set_ylabel('Total Precipitation', fontsize=12, color='black')
-    ax1.tick_params(axis='y', labelcolor='black')
-    
+    ax_left.set_title(f'Forecast Skill {plot_var.upper()} and Ground Truth Precipitation vs. Lead Time', fontsize=16, pad=20)
+    if plot_var == 'acc':
+        which_better = 'higher'
+    elif plot_var == 'rmse' or plot_var == 'mse':
+        which_better = 'lower'
+    ax_left.set_ylabel(f'Average {plot_var.upper()} ({which_better} is better)', fontsize=12, color='black')
+    ax_left.ticklabel_format(style='sci', axis='y', scilimits=(0, 0))
+    ax_left.grid(True, which='both', linestyle='--', linewidth=0.5)
+
+    ax_right.set_ylabel('Total Precipitation', fontsize=12, color='black')
+    ax_right.tick_params(axis='y', labelcolor='black')
+
     max_hours = summary_df['lead_time_hours'].max() if not summary_df.empty else 168
-    ax2.set_xlabel('Lead Time (hours)', fontsize=12)
-    ax2.set_xticks(np.arange(0, max_hours + 1, 24))
+    ax_left.set_xlabel('Lead Time (hours)', fontsize=12)
+    ax_left.set_xticks(np.arange(0, max_hours + 1, 24))
 
-    # Combine legends
-    lines1, labels1 = ax2.get_legend_handles_labels()
-    lines2, labels2 = ax1.get_legend_handles_labels()
-    ax2.legend(lines1 + lines2, labels1 + labels2, loc='upper left', fontsize=10)
+    ax_left.legend(line_handles, line_labels, loc='upper left', fontsize=10)
 
-    plt.tight_layout()
-    os.makedirs(os.path.dirname(output_path), exist_ok=True)
+    # Bottom panel: % improvement vs baseline
+    ax_imp = fig.add_subplot(gs[1, 0], sharex=ax_left)
+
+    # Plot % improvement for each non-baseline model
+    for group_keys, group_data in summary_df.groupby(group_cols_for_plot):
+        model_name = group_keys if isinstance(group_keys, str) else group_keys[0]
+        region = None if isinstance(group_keys, str) else group_keys[1]
+        if model_name == baseline_model or model_name == 'HRES':
+            continue
+
+        display_name = model_rename.get(model_name, model_name) if model_rename else model_name
+        label = display_name if region is None else f"{display_name} ({region})"
+        color = manual_colors.get(label, manual_colors.get(display_name, "black"))
+        group_data = group_data.sort_values('lead_time_hours')[['lead_time_hours', f'{plot_var}_mean']].rename(columns={f'{plot_var}_mean': f'{plot_var}_model'})
+
+        # Choose the matching baseline (region-aware if applicable)
+        if has_region:
+            base_df = baseline_by_region.get(region)
+            if base_df is None or base_df.empty:
+                # no matching baseline for this region; skip
+                continue
+        else:
+            base_df = base_df_only
+
+        merged = pd.merge(group_data, base_df, on='lead_time_hours', how='inner')
+        # Avoid division by zero: if base mse is 0, set improvement to 0
+        denom = merged[f'{plot_var}_base'].replace(0, np.nan)
+        merged['improvement_pct'] = 100.0 * (merged[f'{plot_var}_base'] - merged[f'{plot_var}_model']) / denom
+        merged['improvement_pct'] = merged['improvement_pct'].fillna(0.0)
+
+        ax_imp.plot(
+            merged['lead_time_hours'],
+            merged['improvement_pct'],
+            marker='o', linestyle='-', linewidth=2, color=color, label=label
+        )
+
+    ax_imp.axhline(0.0, linestyle='--', linewidth=1.0, color='gray')
+    ax_imp.set_ylabel('% Improvement vs. Baseline', fontsize=12)
+    ax_imp.set_xlabel('Lead Time (hours)', fontsize=12)
+    ax_imp.grid(True, which='both', linestyle='--', linewidth=0.5)
+
+    # Optional: keep the legend only for the bottom panel if you prefer
+    ax_imp.legend(loc='upper right', fontsize=10)
+
+    # plt.tight_layout()
+    os.makedirs(os.path.dirname(output_path) or ".", exist_ok=True)
     plt.savefig(output_path, dpi=300, bbox_inches='tight')
     print(f"Saved plot to {output_path}")
     plt.show()
 
 
-# ---------------------- Main CLI -----------------------
-if __name__ == "__main__":
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--csv_path", type=str, required=True, help="Forecast CSV with init_date and mse columns")
-    parser.add_argument("--accumulated_nc", type=str, required=True, help="Path to imerg_2014_6h_accumulated.nc")
-    parser.add_argument("--output_path", type=str, default="./plots/forecast_with_truth.png")
-    parser.add_argument("--k_factor", type=float, default=2.0)
-    parser.add_argument("--baseline_model", type=str, default="Graphcast_Base")
-    parser.add_argument("--models_to_plot", type=str, default=None)
-    parser.add_argument("--model_rename", type=str, default=None)
-    parser.add_argument("--use_saved_data", action="store_true", default=True, help="Use saved CSV files if available")
-    parser.add_argument("--force_recompute", action="store_true", help="Force recomputation even if saved files exist")
+# ---------------------- YAML config loader & entrypoint -----------------------
+def load_config(path: str = "config.yaml") -> dict:
+    if not os.path.exists(path):
+        raise FileNotFoundError(f"Config file not found: {path}")
+    with open(path, "r") as f:
+        cfg = yaml.safe_load(f) or {}
+    return cfg
 
-    args = parser.parse_args()
-    models_to_plot = args.models_to_plot.split(",") if args.models_to_plot else None
-    model_rename = dict(item.split(":") for item in args.model_rename.split(",")) if args.model_rename else None
-    use_saved_data = args.use_saved_data and not args.force_recompute
+def main():
+    # config path: sys.argv[1] if provided, else "config.yaml"
+    cfg_path = sys.argv[1] if len(sys.argv) > 1 else "config.yaml"
+    cfg = load_config(cfg_path)
+
+    # Required
+    csv_path = cfg["csv_path"]
+    accumulated_nc = cfg["accumulated_nc"]
+    output_path = cfg.get("output_path", "./plots/forecast_with_truth.png")
+
+    # Optional
+    k_factor = float(cfg.get("k_factor", 2.0))
+    baseline_model = cfg.get("baseline_model", "Graphcast_Base")
+    models_to_plot = cfg.get("models_to_plot")  # list or None
+    model_rename = cfg.get("model_rename")      # dict or None
+    plot_var = cfg.get("plot_var")
+
+    # Saved-data behavior
+    use_saved_data = bool(cfg.get("use_saved_data", True))
+    force_recompute = bool(cfg.get("force_recompute", False))
+    use_saved_data = use_saved_data and (not force_recompute)
 
     plot_forecast_with_ground_truth(
-        csv_path=args.csv_path,
-        accumulated_nc_path=args.accumulated_nc,
-        output_path=args.output_path,
-        k_factor=args.k_factor,
-        baseline_model=args.baseline_model,
+        csv_path=csv_path,
+        accumulated_nc_path=accumulated_nc,
+        output_path=output_path,
+        k_factor=k_factor,
+        baseline_model=baseline_model,
         models_to_plot=models_to_plot,
         model_rename=model_rename,
-        use_saved_data=use_saved_data
+        use_saved_data=use_saved_data,
+        plot_var = plot_var
     )
 
-"""
-python enhanced_6hr.py \
-    --csv_path skill_score_India_2025-08-2110-39-16_ACC.csv \
-    --accumulated_nc '/home/saptarishi.dhanuka_asp25/imerg_2014_6h_accumulated.nc' \
-    --output_path plots/acc_forecast1.png \
-    --models_to_plot "Graphcast_Base_2014,Graphcast_Finetuned1_2014", Graphcast_Finetuned2_2014 \
-    --model_rename "Graphcast_Base_2014:Base,Graphcast_Finetuned1_2014:Finetuned1", Graphcast_Finetuned2_2014: Finetuned2 \
-    --baseline_model Graphcast_Base_2014
-"""
+if __name__ == "__main__":
+    main()

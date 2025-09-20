@@ -13,8 +13,6 @@ python /home/saptarishi.dhanuka_asp25/weather/graphcast_dir/graphcast/local_file
 """
 Runs model for each init date and save preds
 """
-# <eval_forecast.py>
-# Parameters
 chosen_year = 2025
 eval_start = "2024-06-01"
 eval_end = "2024-06-30"
@@ -39,7 +37,8 @@ world_regions = ['India']
 Complete evaluation of forecast against different datasets with rainfall analysis
 """
 import os
-# os.environ["CUDA_VISIBLE_DEVICES"] = "1"
+os.environ["CUDA_VISIBLE_DEVICES"] = "0"
+import gc
 import sys
 import logging
 import argparse
@@ -60,8 +59,8 @@ import jax
 import optax
 
 
-# os.environ['XLA_PYTHON_CLIENT_PREALLOCATE'] = 'false'
 # os.environ['XLA_PYTHON_CLIENT_MEM_FRACTION'] = '0.50'
+os.environ['XLA_PYTHON_CLIENT_PREALLOCATE'] = 'false'
 os.environ["XLA_PYTHON_CLIENT_ALLOCATOR"] = "platform"
 
 sys.path.append(os.path.abspath(os.path.join(os.getcwd(), '..')))
@@ -83,7 +82,72 @@ print("Imports done")
 
 # --- Basic Setup ---
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
-args = parse_args()
+parser = argparse.ArgumentParser(description="Evaluate GraphCast forecasts against datasets like ERA5/IMERG")
+
+# Evaluation range
+parser.add_argument('--eval_start', type=str, required=True,
+                    help='Start date for evaluation period (format: YYYY-MM-DD)')
+parser.add_argument('--eval_end', type=str, required=True,
+                    help='End date for evaluation period (format: YYYY-MM-DD)')
+
+# Dataset choice
+parser.add_argument('--eval_dataset_choice', type=str, choices=['era5', 'imerg', 'imd', 'stations'], default='era5',
+                    help='Dataset choice for evaluation')
+
+parser.add_argument('--vars_to_eval', type=str, required=True, help='Which variables to evaluate')
+
+# Data paths
+parser.add_argument('--eval_data_path', type=str, default='/Datastorage/saptarishi.dhanuka_asp25/era5_data/era5_cache/',
+                    help='Path to Eval dataset')
+
+parser.add_argument('--params_path_old', type=str, default='/Datastorage/saptarishi.dhanuka_asp25/gc_weights/origs/graphcast_1_13.npz',
+                    help='Path to original GraphCast parameters (.npz)')
+
+parser.add_argument('--params_path_new1', type=str, default=None,
+                    help='Path to fine-tuned GraphCast parameters (.npz)')
+
+
+parser.add_argument('--params_path_new2', type=str, default=None,
+                    help='Path to fine-tuned GraphCast parameters (.npz)')
+
+
+parser.add_argument('--norms_dir', type=str, default='/Datastorage/saptarishi.dhanuka_asp25/norms_gc/',
+                    help='Directory containing normalization .nc files')
+
+# Output paths
+parser.add_argument('--output_pred_old_dir', type=str,
+                    default='/Datastorage/saptarishi.dhanuka_asp25/preds_dir/',
+                    help='Output path for original GraphCast predictions')
+parser.add_argument('--output_pred_finetuned_dir', type=str,
+                    default='/Datastorage/saptarishi.dhanuka_asp25/preds_dir/',
+                    help='Output path for fine-tuned GraphCast predictions')
+parser.add_argument('--plots_dir', type=str, default='plots/evals',
+                    help='Directory to save eval plots')
+
+parser.add_argument('--plot_timesteps', type=int, default=4,
+                    help='Number of timesteps to generate plots for')
+
+# Spatial extent
+parser.add_argument('--latmin', type=float, default=6, help='Minimum latitude for plotting')
+parser.add_argument('--latmax', type=float, default=38, help='Maximum latitude for plotting')
+parser.add_argument('--lonmin', type=float, default=68, help='Minimum longitude for plotting')
+parser.add_argument('--lonmax', type=float, default=98, help='Maximum longitude for plotting')
+parser.add_argument('--chosen_year', type=int, default=None, required=True, help='Eval year')
+
+parser.add_argument('--real_time', type=str, default=None, help='Eval year')
+parser.add_argument('--resolution', type=str, default=None, help='Eval year')
+parser.add_argument('--hour6', type=bool, default=None, help='Eval year')
+
+
+parser.add_argument(
+"--params_paths",
+nargs="+",   # allows multiple values
+type=str,
+required=True,
+help="List of new model parameter paths to evaluate."
+)
+
+args = parser.parse_args()
 
 # Add new argument to the parser in utils.py
 # For now, let's handle it here if it's not in the original file
@@ -100,24 +164,35 @@ params_path_new1 = args.params_path_new1
 params_path_new2 = args.params_path_new2
 chosen_year = args.chosen_year
 resolution = args.resolution
+hour6 = args.hour6
 
 # --- Data and Model Loading ---
 logging.info(f"Loading dataset '{dataset_choice}' from {eval_start} to {eval_end}")
 if dataset_choice == "imerg":
+
     if resolution == '0.25':
         print(f"Not using IMERG for the 0.25 data for now")
         apath = "/Datastorage/saptarishi.dhanuka_asp25/era5_data/era5_025_cache/"
         dbase,_, _ = trainer.dataloader.open_databases(apath,None)
+
+
     else:
         apath = '/Datastorage/saptarishi.dhanuka_asp25/era5_data/era5_cache/'
         dbase,_, _ = trainer.dataloader.open_databases(apath,None)
-        # dbase = construct_era5_imerg_6hourly(dbase, year=chosen_year, save=True)
-        if args.real_time != 'True':
-            dbase = construct_era5_imerg(dbase, year=chosen_year, save=True)
+        if hour6:
+            print('6 hourly truths')
+            dbase = construct_era5_imerg_6hourly(dbase, year=chosen_year, save=True)
+        else:
+            if args.real_time != 'True':
+                dbase = construct_era5_imerg(dbase, year=chosen_year, save=True)
     # Load a slightly larger window to ensure we have the day before the start_date for initialization
-    load_start_date = pd.to_datetime(eval_start) - pd.Timedelta(days=1)
-    eval_time_ds = dbase.sel(time=slice(load_start_date.strftime('%Y-%m-%d'), eval_end))
-    del dbase
+else:
+    print("Not using IMERG")
+    dbase,_, _ = trainer.dataloader.open_databases(apath,None)
+
+load_start_date = pd.to_datetime(eval_start) - pd.Timedelta(days=1)
+eval_time_ds = dbase.sel(time=slice(load_start_date.strftime('%Y-%m-%d'), eval_end))
+del dbase
 
 select_time_eval = process_to_graphcast_format(eval_time_ds)
 logging.info(f"Full data range loaded: {select_time_eval.time.values[0]} to {select_time_eval.time.values[-1]}")
@@ -166,27 +241,6 @@ def run_model(params, state, inputs, targets_template, forcings):
         params=params,
         state=state
     )
-
-
-
-
-
-
-
-
-# --- HRES Data Handling ---
-import glob
-def extract_hres_date(path):
-    parts = path.split('_')
-    # print(parts)
-    year = 2024  # fixed, or extract if you want dynamic
-    month = int(parts[5])
-    day = int(parts[6])
-    return datetime(year, month, day)
-
-logging.info("Mapping HRES forecast files...")
-hres_file_list = glob.glob("/Datastorage/saptarishi.dhanuka_asp25/forecasts_hres/raw_hres/2024/*.grib")
-# hres_files_map = {extract_hres_date(p): p for p in hres_file_list}
 
 
 all_results = []
@@ -253,33 +307,43 @@ for init_date in tqdm(initialization_dates, desc="Evaluating Forecasts", leave=T
 
     # 3. Run all Graphcast models
     logging.debug(f"Running Graphcast models for {init_date}")
-    print("Base run")
-    predictions_base = run_model(params, state, eval_inputs, targets_template, eval_forcings)
+
+    # print("Base run")
+    # predictions_base = run_model(params, state, eval_inputs, targets_template, eval_forcings)
     
-    # print("Finetuned 1")
-    # predictions_ft1 = run_model(new_params1, state, eval_inputs, targets_template, eval_forcings)
     # print("Finetuned 2")
     # predictions_ft2 = run_model(new_params2, state, eval_inputs, targets_template, eval_forcings)
 
-    if not os.path.exists('/Datastorage/saptarishi.dhanuka_asp25/rolled_out_preds/025res/era_precip025_target_init_{init_date}.nc'):
-        eval_targets['total_precipitation_6hr'].to_netcdf(f'/Datastorage/saptarishi.dhanuka_asp25/rolled_out_preds/025res/era_precip025_target_init_{init_date}.nc')
+    target_path = f'/Datastorage/saptarishi.dhanuka_asp25/rolled_out_preds/target_{dataset_choice}_init_6h_precip_{init_date}.nc'
+    if not os.path.exists(target_path):
+        eval_targets['total_precipitation_6hr'].to_netcdf(target_path)
 
-    if not os.path.exists(f'/Datastorage/saptarishi.dhanuka_asp25/rolled_out_preds/025res/base_precip025_init_{init_date}.nc'):
-        predictions_base['total_precipitation_6hr'].to_netcdf(f'/Datastorage/saptarishi.dhanuka_asp25/rolled_out_preds/025res/base_precip025_init_{init_date}.nc')
-    # predictions_ft1.to_netcdf(f'/Datastorage/saptarishi.dhanuka_asp25/rolled_out_preds/fine_val_init_{init_date}.nc')
+    # if not os.path.exists(f'/Datastorage/saptarishi.dhanuka_asp25/rolled_out_preds/025res/base_precip025_init_{init_date}.nc'):
+    #     predictions_base['total_precipitation_6hr'].to_netcdf(f'/Datastorage/saptarishi.dhanuka_asp25/rolled_out_preds/025res/base_precip025_init_{init_date}.nc')
+
+    # if not os.path.exists(f'/Datastorage/saptarishi.dhanuka_asp25/rolled_out_preds/fine_{params_path_new1.split("/")[-1].split(".")[0]}_6h_init_{init_date}.nc'):
+    #     print("Finetuned 1")
+    #     predictions_ft1 = run_model(new_params1, state, eval_inputs, targets_template, eval_forcings)
+    #     predictions_ft1['total_precipitation_6hr'].to_netcdf(f'/Datastorage/saptarishi.dhanuka_asp25/rolled_out_preds/fine_{params_path_new1.split("/")[-1].split(".")[0]}_6h_init_{init_date}.nc')
+
+
+    # predictions_ft1['total_precipitation_6hr'].to_netcdf(f'/Datastorage/saptarishi.dhanuka_asp25/rolled_out_preds/fine_{params_path_new1.split("/")[-1].split(".")[0]}_6h_init_{init_date}.nc')
     # predictions_ft2.to_netcdf(f'/Datastorage/saptarishi.dhanuka_asp25/rolled_out_preds/fine_init_{init_date}.nc')
 
-    import gc
     del eval_sim_data
     del eval_inputs
     del eval_targets
     del eval_forcings
     del targets_template
     del ground_truth_var
-    del predictions_base
-    # If predictions_ft1 and predictions_ft2 are uncommented, delete them as well:
-    # del predictions_ft1
-    # del predictions_ft2
+    if 'predictions_base' in locals():
+        del predictions_base
+    if 'predictions_ft1' in locals():
+        del predictions_ft1
+    if 'predictions_ft2' in locals():
+        del predictions_ft2
+    if 'eval_targets' in locals():
+        del eval_targets
     
     gc.collect() # Manually trigger garbage collection
 

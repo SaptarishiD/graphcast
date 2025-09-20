@@ -1,4 +1,3 @@
-from tqdm.auto import tqdm
 import xarray as xr
 import numpy as np
 import pandas as pd
@@ -54,10 +53,8 @@ def _select_region(da: xr.DataArray, lat_min: float, lat_max: float, lon_min: fl
     Select a lat/lon bbox from a DataArray with dims (..., lat, lon).
     Handles 0/360 wrap for longitudes if lon_min > lon_max (e.g., 350..360 U 0..20).
     """
-    # Latitude slice respecting order
     lat_sel = _lat_slice(da, lat_min, lat_max)
 
-    # Longitude(s)
     if lon_min <= lon_max:
         return da.sel(lat=lat_sel, lon=_lon_slice(da, lon_min, lon_max))
     else:
@@ -104,9 +101,11 @@ def compute_regional_rmse(
     precip_var: str = "total_precipitation_6hr",
 ) -> pd.DataFrame:
     """
-    Compute RMSE for precipitation over specified regions for all lead times.
+    Compute metrics for precipitation over specified regions for all lead times.
 
-    Returns a DataFrame with columns: init_date, lead_time, model, region, rmse
+    Returns a DataFrame with columns:
+      init_date, lead_time, model, region, rmse, target_mean, pred_mean
+    where target_mean and pred_mean are region-mean precipitation values.
     """
     init_date_str = _extract_init_from_stem(Path(forecast_file).stem)
     init_date = pd.to_datetime(init_date_str)
@@ -126,7 +125,7 @@ def compute_regional_rmse(
         lead_hours = _lead_hours_from_time_coord(forecast_da["time"].values)
 
         rows = []
-        # Compute region-wise RMSE across spatial dims for every lead time (vectorized)
+        # Compute region-wise metrics across spatial dims for every lead time (vectorized)
         for region_name, (lat_min, lat_max, lon_min, lon_max) in regions_dict.items():
             f_reg = _select_region(forecast_da, lat_min, lat_max, lon_min, lon_max).isel(batch=0)
             t_reg = _select_region(target_da,   lat_min, lat_max, lon_min, lon_max).isel(batch=0)
@@ -134,13 +133,18 @@ def compute_regional_rmse(
             # Align just in case coords differ slightly
             f_reg, t_reg = xr.align(f_reg, t_reg, join="inner")
 
-            # mean over lat/lon -> one value per time
-            # NOTE: keep computations in xarray; compute at the end
+            # Compute RMSE(time), region-mean predicted(time), region-mean target(time)
             rmse_t = ((f_reg - t_reg) ** 2).mean(dim=("lat", "lon")) ** 0.5
-            rmse_vals = rmse_t.compute().values  # shape: (time,)
+            pred_mean_t = f_reg.mean(dim=("lat", "lon"))
+            target_mean_t = t_reg.mean(dim=("lat", "lon"))
 
-            # Assemble rows for all lead times
-            for lh, rv in zip(lead_hours, rmse_vals):
+            # Trigger computation together (efficient for Dask)
+            rmse_vals, pred_means, target_means = rmse_t, pred_mean_t, target_mean_t
+            rmse_vals = rmse_vals.values
+            pred_means = pred_means.values
+            target_means = target_means.values
+
+            for lh, rv, pv, tv in zip(lead_hours, rmse_vals, pred_means, target_means):
                 rows.append(
                     {
                         "init_date": init_date,
@@ -148,6 +152,8 @@ def compute_regional_rmse(
                         "model": model_name,
                         "region": region_name,
                         "rmse": float(rv),
+                        "target_mean": float(tv),
+                        "pred_mean": float(pv),
                     }
                 )
 
@@ -165,7 +171,7 @@ def process_all_forecasts_for_model(
     restrict_init_dates: Optional[List[str]] = None,
 ) -> pd.DataFrame:
     """
-    Process all forecast files for a single model and compute regional RMSE.
+    Process all forecast files for a single model and compute regional metrics.
 
     restrict_init_dates (optional): list of init datetime strings in the form
       "YYYY-MM-DD HH:MM:SS". If provided, only those inits are processed.
@@ -207,7 +213,7 @@ def process_all_forecasts_for_model(
             continue
 
     if not all_results:
-        return pd.DataFrame(columns=["init_date", "lead_time", "model", "region", "rmse"])
+        return pd.DataFrame(columns=["init_date", "lead_time", "model", "region", "rmse", "target_mean", "pred_mean"])
 
     final_df = pd.concat(all_results, ignore_index=True)
     final_df.sort_values(["init_date", "lead_time", "region"], inplace=True)
@@ -238,14 +244,15 @@ def process_multiple_models(
       - Per-model CSVs if per_model_outdir is provided
       - Combined CSV at output_combined_file
 
-    Returns combined DataFrame.
+    Returns combined DataFrame with columns:
+      init_date, lead_time, model, region, rmse, target_mean, pred_mean
     """
     per_model_dfs = []
     per_model_outdir = Path(per_model_outdir) if per_model_outdir else None
     if per_model_outdir:
         per_model_outdir.mkdir(parents=True, exist_ok=True)
 
-    for m in tqdm(models, desc="Models"):
+    for m in models:
         name = m["name"]
         fdir = m["forecast_dir"]
         fpat = m.get("forecast_pattern", "*init_*.nc")
@@ -275,7 +282,7 @@ def process_multiple_models(
         return combined
 
     print("\nNo results to save for any model.")
-    return pd.DataFrame(columns=["init_date", "lead_time", "model", "region", "rmse"])
+    return pd.DataFrame(columns=["init_date", "lead_time", "model", "region", "rmse", "target_mean", "pred_mean"])
 
 
 # ----------------------------
@@ -284,32 +291,31 @@ def process_multiple_models(
 if __name__ == "__main__":
     # Define regions: (lat_min, lat_max, lon_min, lon_max)
     regions = {
-        "North_America": (20, 70, 230, 300),   # 0-360 longitudes
-        "Europe":        (35, 70, 350, 40),    # wraps 350..360 U 0..40
-        "East_Asia":     (20, 50, 100, 145),
-        "South_America": (-55, 15, 280, 330),
-        "Africa":        (-35, 35, 340, 55),   # wraps
-        "Australia":     (-45, -10, 110, 155),
-        "Arctic":        (70, 90, 0, 360),     # all longitudes
-        "Tropics":       (-20, 20, 0, 360),
+    "North_America": (20, 70, 230, 300),   # 0-360 longitudes
+    "Europe":        (35, 70, 350, 40),    # wraps 350..360 U 0..40
+    "East_Asia":     (20, 50, 100, 145),
+    "South_America": (-55, 15, 280, 330),
+    "Africa":        (-35, 35, 340, 55),   # wraps
+    "Australia":     (-45, -10, 110, 155),
+    "Arctic":        (70, 90, 0, 360),     # all longitudes
+    "Tropics":       (-20, 20, 0, 360),
 
-        # Major Indian cities (rounded to nearest integer degree ranges)
-        "mumbai":        (18, 20, 72, 74),
-        "delhi":         (28, 29, 76, 78),
-        "kolkata":       (22, 23, 88, 89),
-        "chennai":       (12, 13, 80, 81),
-        "bengaluru":     (12, 13, 77, 78),
-        "hyderabad":     (17, 18, 78, 79),
-        "ahmedabad":     (23, 24, 72, 73),
-        "pune":          (18, 19, 73, 74),
-        "jaipur":        (26, 27, 75, 76),
-        "lucknow":       (26, 27, 80, 81),
-        "bhopal":        (23, 24, 77, 78),
-        "guwahati":      (26, 27, 91, 92),
-        "srinagar":      (34, 35, 74, 75),
-        "thiruvananthapuram": (8, 9, 76, 77),
-    }
-
+    # Major Indian cities (rounded to nearest integer degree ranges)
+    "mumbai":        (18, 20, 72, 74),
+    "delhi":         (28, 29, 76, 78),
+    "kolkata":       (22, 23, 88, 89),
+    "chennai":       (12, 13, 80, 81),
+    "bengaluru":     (12, 13, 77, 78),
+    "hyderabad":     (17, 18, 78, 79),
+    "ahmedabad":     (23, 24, 72, 73),
+    "pune":          (18, 19, 73, 74),
+    "jaipur":        (26, 27, 75, 76),
+    "lucknow":       (26, 27, 80, 81),
+    "bhopal":        (23, 24, 77, 78),
+    "guwahati":      (26, 27, 91, 92),
+    "srinagar":      (34, 35, 74, 75),
+    "thiruvananthapuram": (8, 9, 76, 77),
+}
     # List as many models as you want here
     models_to_eval = [
         {
@@ -333,7 +339,7 @@ if __name__ == "__main__":
         models=models_to_eval,
         target_dir="/Datastorage/saptarishi.dhanuka_asp25/rolled_out_preds",
         regions_dict=regions,
-        output_combined_file="rmse_regions_ALL_MODELS_cities.csv",
+        output_combined_file="rmse_regions_ALL_MODELS1.csv",
         per_model_outdir="per_model_results",
         target_prefix="target_init_",
         precip_var="total_precipitation_6hr",
@@ -349,5 +355,3 @@ if __name__ == "__main__":
 
         print("\nSample rows:")
         print(combined_df.head(10))
-    
-    print(f"Saved combined results to 'rmse_regions_ALL_MODELS_cities.csv'")

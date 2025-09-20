@@ -13,6 +13,7 @@ python /home/saptarishi.dhanuka_asp25/weather/graphcast_dir/graphcast/local_file
 Complete evaluation of forecast against different datasets
 """
 import os
+os.environ["CUDA_VISIBLE_DEVICES"] = "1"
 import sys
 import logging
 import argparse
@@ -217,120 +218,306 @@ def plot_accumulated_diff(data_array, title, simnum, absolute=True, cmap='RdBu',
     ax.set_title(title)
     ax.set_extent([65, 100, 5, 40])  # Set extent over India
 
-    plt.savefig(f'./output/20240601_20240730_train/_accumulated_diff_map_{title}_sim_{simnum}')
+    plt.savefig(f'./output/20240601_20240730_train/shapefile_accumulated_diff_map_{title}_sim_{simnum}')
     plt.close()
 
 
-def plot_accumulated_diff_side_by_side(truth, pred1, pred2, data_arrays, titles, simnum, absolute=True, cmap='RdBu', vmin=None, vmax=None):
+# def plot_accumulated_diff_side_by_side(truth, pred1, pred2, data_arrays, titles, simnum, absolute=True, cmap='RdBu', vmin=None, vmax=None):
+#     """
+#     Plot 3 data arrays side by side on a map with fixed colorbar range depending on the `absolute` flag.
+
+#     Parameters:
+#         data_arrays (list of xarray.DataArray): Three data arrays to plot.
+#         titles (list of str): Titles for each subplot.
+#         simnum (int): Simulation number to use in filename.
+#         absolute (bool): Whether to fix color range to absolute values (0 to 0.6) or relative (-0.3 to 0.3).
+#         cmap (str): Colormap.
+#         vmin (float): Minimum value for colorbar (overridden by absolute flag if None).
+#         vmax (float): Maximum value for colorbar (overridden by absolute flag if None).
+#     """
+#     # Set fixed vmin/vmax depending on 'absolute'
+
+#     lon_min, lon_max = 65, 95
+#     lat_min, lat_max = 5, 40
+
+#     assert(truth.lat.values[0] - truth.lat.values[1] < 0)
+#     assert(pred1.lat.values[0] - pred1.lat.values[1] < 0)
+#     assert(pred2.lat.values[0] - pred2.lat.values[1] < 0)
+
+#     # Slice to Indian region
+#     truth_india  = truth.sel(lat=slice(lat_min, lat_max), lon=slice(lon_min, lon_max))['total_precipitation_6hr'].sum(dim="time").squeeze(dim='batch')
+#     pred1_india  = pred1.sel(lat=slice(lat_min, lat_max), lon=slice(lon_min, lon_max))['total_precipitation_6hr'].sum(dim="time").squeeze(dim='batch')
+#     pred2_india  = pred2.sel(lat=slice(lat_min, lat_max), lon=slice(lon_min, lon_max))['total_precipitation_6hr'].sum(dim="time").squeeze(dim='batch')
+
+
+#     # Set vmin and vmax based on absolute flag (for diff maps only)
+#     if absolute:
+#         vmin_diff = 0 if vmin is None else vmin
+#         vmax_diff = 0.7 if vmax is None else vmax
+#     else:
+#         vmin_diff = -0.4 if vmin is None else vmin
+#         vmax_diff = 0.4 if vmax is None else vmax
+
+#     # Setup figure with 2 rows and 3 columns
+#     fig, axes = plt.subplots(2, 3, figsize=(20, 10), subplot_kw={'projection': ccrs.PlateCarree()})
+
+
+#     data_arrays = [truth_india, pred1_india, pred2_india, data_arrays[0], data_arrays[1], data_arrays[2]]
+#     titles = [
+#         "Ground Truth",
+#         "Prediction 1",
+#         "Prediction 2",
+#         "Pred1 - Truth",
+#         "Pred2 - Truth",
+#         "Pred1 - Pred2"
+#     ]
+
+#     for i, ax in enumerate(axes.flat):
+#         da = data_arrays[i]
+
+#         # Only apply fixed vmin/vmax to difference plots (last 3)
+#         if i < 3:
+#             im = da.plot.pcolormesh(
+#                 ax=ax,
+#                 transform=ccrs.PlateCarree(),
+#                 cmap=cmap,
+#                 add_colorbar=(i == 2),  # Add colorbar only to last of top row
+#                 cbar_kwargs={'label': 'Precipitation (mm)'} if i == 2 else {}
+#             )
+#         else:
+#             im = da.plot.pcolormesh(
+#                 ax=ax,
+#                 transform=ccrs.PlateCarree(),
+#                 cmap=cmap,
+#                 vmin=vmin_diff,
+#                 vmax=vmax_diff,
+#                 add_colorbar=(i == 5),  # Add colorbar only to last of bottom row
+#                 cbar_kwargs={'label': 'Difference (mm)'} if i == 5 else {}
+#             )
+
+#         ax.set_title(titles[i], fontsize=12)
+#         ax.set_extent([lon_min, lon_max, lat_min, lat_max])
+#         ax.coastlines()
+
+#     plt.tight_layout()
+#     plt.savefig(f'./output/train_compare/sim_{simnum}_{"absolute" if absolute else "diff"}_6panel_plot.png')
+#     plt.close()
+
+#     # if absolute:
+#     #     vmin = 0 if vmin is None else vmin
+#     #     vmax = 0.7 if vmax is None else vmax
+#     # else:
+#     #     vmin = -0.4 if vmin is None else vmin
+#     #     vmax = 0.4 if vmax is None else vmax
+
+#     # # Set up the figure with 3 subplots
+#     # fig, axes = plt.subplots(1, 3, figsize=(18, 6), subplot_kw={'projection': ccrs.PlateCarree()})
+
+#     # for i in range(3):
+#     #     ax = axes[i]
+#     #     im = data_arrays[i].plot.pcolormesh(
+#     #         ax=ax,
+#     #         transform=ccrs.PlateCarree(),
+#     #         cmap=cmap,
+#     #         vmin=vmin,
+#     #         vmax=vmax,
+#     #         add_colorbar=(i == 2),  # Only add colorbar to the last subplot
+#     #         cbar_kwargs={'label': 'Accumulated Error (mm)'} if i == 2 else {}
+#     #     )
+#     #     ax.set_title(titles[i])
+#     #     ax.set_extent([65, 100, 5, 40])  # over India
+#     #     ax.coastlines()
+
+#     # # Save the figure
+#     # plt.tight_layout()
+#     # plt.savefig(f'./output/train_compare/{absolute}_accumulated_diff_sim_{simnum}_side_by_side.png')
+#     # plt.close()
+
+
+def plot_comparison_and_diffs(truth, pred1, pred2, old, simnum, 
+                              cmap_precip='Blues', cmap_diff='RdBu', 
+                              lon_min=65, lon_max=95, lat_min=5, lat_max=40):
     """
-    Plot 3 data arrays side by side on a map with fixed colorbar range depending on the `absolute` flag.
+    Plot precipitation and difference maps for:
+      • Ground truth
+      • Prediction 1
+      • Prediction 2
+      • Difference: pred1 - truth
+      • Difference: pred2 - truth
+      • Difference: old - truth
+      • Difference: pred1 - old
 
-    Parameters:
-        data_arrays (list of xarray.DataArray): Three data arrays to plot.
-        titles (list of str): Titles for each subplot.
-        simnum (int): Simulation number to use in filename.
-        absolute (bool): Whether to fix color range to absolute values (0 to 0.6) or relative (-0.3 to 0.3).
-        cmap (str): Colormap.
-        vmin (float): Minimum value for colorbar (overridden by absolute flag if None).
-        vmax (float): Maximum value for colorbar (overridden by absolute flag if None).
+    Arranged in a 2×4 grid (only 7 panels used).
     """
-    # Set fixed vmin/vmax depending on 'absolute'
 
-    lon_min, lon_max = 65, 95
-    lat_min, lat_max = 5, 40
+    # 1. Slice to India and sum over time & batch
+    def prep(da):
+        return (da
+                .sel(lat=slice(lat_min, lat_max), lon=slice(lon_min, lon_max))
+                ['total_precipitation_6hr']
+                .sum(dim="time")
+                .squeeze(dim='batch'))
 
-    assert(truth.lat.values[0] - truth.lat.values[1] < 0)
-    assert(pred1.lat.values[0] - pred1.lat.values[1] < 0)
-    assert(pred2.lat.values[0] - pred2.lat.values[1] < 0)
+    t = prep(truth)
+    p1 = prep(pred1)
+    p2 = prep(pred2)
+    po = prep(old)
 
-    # Slice to Indian region
-    truth_india  = truth.sel(lat=slice(lat_min, lat_max), lon=slice(lon_min, lon_max))['total_precipitation_6hr'].sum(dim="time").squeeze(dim='batch')
-    pred1_india  = pred1.sel(lat=slice(lat_min, lat_max), lon=slice(lon_min, lon_max))['total_precipitation_6hr'].sum(dim="time").squeeze(dim='batch')
-    pred2_india  = pred2.sel(lat=slice(lat_min, lat_max), lon=slice(lon_min, lon_max))['total_precipitation_6hr'].sum(dim="time").squeeze(dim='batch')
+    # 2. Compute difference fields
+    d1 = p1 - t
+    d2 = p2 - t
+    d3 = po - t
+    d4 = p1 - po
 
+    # 3. Determine a common vmax for precipitation plots
+    vmax_precip = float(max(t.max(), p1.max(), p2.max()))
 
-    # Set vmin and vmax based on absolute flag (for diff maps only)
-    if absolute:
-        vmin_diff = 0 if vmin is None else vmin
-        vmax_diff = 0.7 if vmax is None else vmax
-    else:
-        vmin_diff = -0.4 if vmin is None else vmin
-        vmax_diff = 0.4 if vmax is None else vmax
+    # 4. Determine symmetric vmin/vmax for diffs
+    vmax_diff = max(abs(d1).max(), abs(d2).max(), abs(d3).max(), abs(d4).max())
+    vlim = float(vmax_diff)
 
-    # Setup figure with 2 rows and 3 columns
-    fig, axes = plt.subplots(2, 3, figsize=(20, 10), subplot_kw={'projection': ccrs.PlateCarree()})
+    # 5. Set up figure: 2 rows × 4 columns
+    fig, axes = plt.subplots(2, 4, figsize=(24, 10),
+                             subplot_kw={'projection': ccrs.PlateCarree()})
 
-
-    data_arrays = [truth_india, pred1_india, pred2_india, data_arrays[0], data_arrays[1], data_arrays[2]]
-    titles = [
-        "Ground Truth",
-        "Prediction 1",
-        "Prediction 2",
-        "Pred1 - Truth",
-        "Pred2 - Truth",
-        "Pred1 - Pred2"
+    panels = [
+        (t,  'Ground Truth',       cmap_precip, 0,        vmax_precip, {'label':'Precip (mm)'}),
+        (p1, 'Prediction 1',       cmap_precip, 0,        vmax_precip, {}),
+        (p2, 'Prediction 2',       cmap_precip, 0,        vmax_precip, {}),
+        (d1, 'Pred1 − Truth',      cmap_diff,  -vlim,     vlim,        {}),
+        (d2, 'Pred2 − Truth',      cmap_diff,  -vlim,     vlim,        {}),
+        (d3, 'Old − Truth',        cmap_diff,  -vlim,     vlim,        {}),
+        (d4, 'Pred1 − Old',        cmap_diff,  -vlim,     vlim,        {'label':'Difference (mm)'}),
     ]
 
-    for i, ax in enumerate(axes.flat):
-        da = data_arrays[i]
-
-        # Only apply fixed vmin/vmax to difference plots (last 3)
-        if i < 3:
-            im = da.plot.pcolormesh(
-                ax=ax,
-                transform=ccrs.PlateCarree(),
-                cmap=cmap,
-                add_colorbar=(i == 2),  # Add colorbar only to last of top row
-                cbar_kwargs={'label': 'Precipitation (mm)'} if i == 2 else {}
-            )
-        else:
-            im = da.plot.pcolormesh(
-                ax=ax,
-                transform=ccrs.PlateCarree(),
-                cmap=cmap,
-                vmin=vmin_diff,
-                vmax=vmax_diff,
-                add_colorbar=(i == 5),  # Add colorbar only to last of bottom row
-                cbar_kwargs={'label': 'Difference (mm)'} if i == 5 else {}
-            )
-
-        ax.set_title(titles[i], fontsize=12)
+    for idx, (da, title, cmap, vmin, vmax, cbar_kwargs) in enumerate(panels):
+        ax = axes.flat[idx]
+        im = da.plot.pcolormesh(
+            ax=ax,
+            transform=ccrs.PlateCarree(),
+            cmap=cmap,
+            vmin=vmin, vmax=vmax,
+            add_colorbar=False
+        )
+        ax.set_title(title, fontsize=12)
         ax.set_extent([lon_min, lon_max, lat_min, lat_max])
         ax.coastlines()
 
+        # only the last panel gets a colorbar, with its own label
+        if 'label' in cbar_kwargs:
+            cb = fig.colorbar(im, ax=ax, orientation='vertical', pad=0.03)
+            cb.set_label(cbar_kwargs['label'])
+
+    # turn off the unused 8th subplot
+    axes.flat[-1].axis('off')
+
     plt.tight_layout()
-    plt.savefig(f'./output/train_compare/sim_{simnum}_{"absolute" if absolute else "diff"}_6panel_plot.png')
+    plt.savefig(f'./output/train_compare/shapefile_sim_{simnum}_comparison_7panel.png')
     plt.close()
 
-    # if absolute:
-    #     vmin = 0 if vmin is None else vmin
-    #     vmax = 0.7 if vmax is None else vmax
-    # else:
-    #     vmin = -0.4 if vmin is None else vmin
-    #     vmax = 0.4 if vmax is None else vmax
+def plot_accumulated_diff_side_by_side(truth, pred1, pred2, data_arrays, titles, simnum,
+                                       absolute=True, cmap='RdBu', vmin=None, vmax=None):
+    """
+    Plot 3 precipitation fields and 4 difference fields side by side on a map.
 
-    # # Set up the figure with 3 subplots
-    # fig, axes = plt.subplots(1, 3, figsize=(18, 6), subplot_kw={'projection': ccrs.PlateCarree()})
+    Parameters:
+        truth, pred1, pred2        : xarray.Dataset of 'total_precipitation_6hr'
+        data_arrays (list of xarray.DataArray): [pred1−truth, pred2−truth, old−truth]
+        titles      (list of str)  : titles for those 3 diff panels, e.g. ["Raw Finetuned 1", "Finetuned 2", "Old"]
+        simnum      (int)          : simulation number for filename
+        absolute    (bool)         : ignored now (all diffs get symmetric range)
+        cmap        (str)          : colormap for diffs (we’ll override precip→Blues)
+        vmin, vmax  (float|None)   : ignored now (we derive fixed ranges)
+    """
+    # India bounds
+    lon_min, lon_max = 65, 95
+    lat_min, lat_max = 5, 40
 
-    # for i in range(3):
-    #     ax = axes[i]
-    #     im = data_arrays[i].plot.pcolormesh(
-    #         ax=ax,
-    #         transform=ccrs.PlateCarree(),
-    #         cmap=cmap,
-    #         vmin=vmin,
-    #         vmax=vmax,
-    #         add_colorbar=(i == 2),  # Only add colorbar to the last subplot
-    #         cbar_kwargs={'label': 'Accumulated Error (mm)'} if i == 2 else {}
-    #     )
-    #     ax.set_title(titles[i])
-    #     ax.set_extent([65, 100, 5, 40])  # over India
-    #     ax.coastlines()
+    # --- 1. Prep precip arrays ---
+    def prep_precip(ds):
+        return (ds
+                .sel(lat=slice(lat_min, lat_max), lon=slice(lon_min, lon_max))
+                ['total_precipitation_6hr']
+                .sum(dim="time")
+                .squeeze(dim="batch"))
 
-    # # Save the figure
-    # plt.tight_layout()
-    # plt.savefig(f'./output/train_compare/{absolute}_accumulated_diff_sim_{simnum}_side_by_side.png')
-    # plt.close()
+    t = prep_precip(truth)
+    p1 = prep_precip(pred1)
+    p2 = prep_precip(pred2)
+
+    # get common vmax for precip
+    vmax_precip = float(max(t.max(), p1.max(), p2.max()))
+
+    # --- 2. Prep diff arrays (already time-summed) ---
+    da1 = data_arrays[0].sel(lat=slice(lat_min, lat_max), lon=slice(lon_min, lon_max))
+    da2 = data_arrays[1].sel(lat=slice(lat_min, lat_max), lon=slice(lon_min, lon_max))
+    da3 = data_arrays[2].sel(lat=slice(lat_min, lat_max), lon=slice(lon_min, lon_max))
+
+    # compute pred1−old = (pred1−truth) - (old−truth)
+    da4 = da1 - da3
+
+    # symmetric vlim for all diffs
+    limit = float(max(abs(da1).max(), abs(da2).max(), abs(da3).max(), abs(da4).max()))
+
+    # --- 3. Build panels & titles ---
+    top = [
+        (t,  "Ground Truth",   'Blues', 0,         vmax_precip, {'label': 'Precip (mm)'}),
+        (p1, "Prediction 1",   'Blues', 0,         vmax_precip, {}),
+        (p2, "Prediction 2",   'Blues', 0,         vmax_precip, {}),
+    ]
+    bot_titles = titles + ["Prediction 1 − Old"]
+    bot = [
+        (da1, bot_titles[0], cmap, -limit, limit, {}),
+        (da2, bot_titles[1], cmap, -limit, limit, {}),
+        (da3, bot_titles[2], cmap, -limit, limit, {}),
+        (da4, bot_titles[3], cmap, -limit, limit, {'label': 'Difference (mm)'}),
+    ]
+
+    panels = top + bot
+
+    # --- 4. Plot ---
+    fig, axes = plt.subplots(2, 4, figsize=(24, 10),
+                             subplot_kw={'projection': ccrs.PlateCarree()})
+    for idx, (da, title, cm, mn, mx, cbar_kw) in enumerate(panels):
+        ax = axes.flat[idx]
+        im = da.plot.pcolormesh(
+            ax=ax,
+            transform=ccrs.PlateCarree(),
+            cmap=cm,
+            vmin=mn,
+            vmax=mx,
+            add_colorbar=False
+        )
+        ax.set_title(title, fontsize=12)
+        ax.set_extent([lon_min, lon_max, lat_min, lat_max])
+        ax.coastlines()
+        if 'label' in cbar_kw:
+            cb = fig.colorbar(im, ax=ax, orientation='vertical', pad=0.03)
+            cb.set_label(cbar_kw['label'])
+
+    # hide unused panel
+    axes.flat[-1].axis('off')
+
+    plt.tight_layout()
+    plt.savefig(f'./output/train_compare/shapefile_sim_{simnum}_comparison_7panel.png')
+    plt.close()
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 import glob
 file_list = glob.glob("/Datastorage/saptarishi.dhanuka_asp25/forecasts_hres/raw_hres/2024/*.grib")
@@ -414,7 +601,9 @@ for i, hres_file in tqdm(enumerate(sorted_paths[5:11]), desc="Sims"):
     # plot_accumulated_diff(accum_fine_raw2, 'Accumulated Raw Difference (Fine-Tuned 2)', simnum=i, absolute=False)
     # plot_accumulated_diff(accum_old_raw, 'Accumulated Raw Difference (Old)', simnum=i, absolute=False)
 
-    plot_accumulated_diff_side_by_side(eval_targets, predictions_finetuned1, predictions_finetuned2, data_arrays=[accum_fine_raw1, accum_fine_raw2, accum_old_raw], titles=["Raw Finetuned 1", "Finetuned 2", "Old"],simnum=i, absolute=False )
+    # plot_accumulated_diff_side_by_side(eval_targets, predictions_finetuned1, predictions_finetuned2, data_arrays=[accum_fine_raw1, accum_fine_raw2, accum_old_raw], titles=["Raw Finetuned 1", "Finetuned 2", "Old"],simnum=i, absolute=False )
+
+
 
     # ---- Accumulate and plot absolute diffs ----
 
@@ -430,11 +619,13 @@ for i, hres_file in tqdm(enumerate(sorted_paths[5:11]), desc="Sims"):
     # plot_accumulated_diff(accum_fine_abs2, 'Accumulated Absolute Difference (Fine-Tuned 2)',simnum=i, cmap='Reds', vmin=0)
 
     # plot_accumulated_diff(accum_old_abs, 'Accumulated Absolute Difference (Old)',simnum=i, cmap='Reds', vmin=0)
+    print("Plotting side by side")
 
     plot_accumulated_diff_side_by_side(eval_targets, predictions_finetuned1, predictions_finetuned2, data_arrays=[accum_fine_abs1, accum_fine_abs2, accum_old_abs], titles=["Absolute Finetuned 1", "Finetuned 2", "Old"],simnum=i )
 
 
-        
+    # plot_comparison_and_diffs(eval_targets, predictions_finetuned1, predictions_finetuned2, data_arrays=[accum_fine_raw1, accum_fine_raw2, accum_old_raw], titles=["Raw Finetuned 1", "Finetuned 2", "Old"],simnum=i, absolute=False )
+
 
     # Compute the MSE for each time step and aggregate
     mse_finetuned1 = []
@@ -494,7 +685,7 @@ for i, hres_file in tqdm(enumerate(sorted_paths[5:11]), desc="Sims"):
     plt.grid(True)
 
     # Show the plot
-    plt.savefig(f"./output/compare/sims_base_finetuned_test_imerg_init_2024_09_01_{eval_trial_batches[i].time.values[0]}_{hres_file[-25:-5]}_{i}")
+    plt.savefig(f"./output/compare/shapefile_sims_base_finetuned_test_imerg_init_2024_09_01_{eval_trial_batches[i].time.values[0]}_{hres_file[-25:-5]}_{i}")
     plt.clf()
     # diff_imd.append(plot_diff_imd_era5_sims(imd_6h_converted,eval_targets,time_step, 'total_precipitation_6hr'))
 
